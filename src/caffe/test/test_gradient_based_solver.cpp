@@ -10,6 +10,7 @@
 #include "caffe/common.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/solver.hpp"
+#include "caffe/util/io.hpp"
 
 #include "caffe/test/test_caffe_main.hpp"
 
@@ -26,6 +27,7 @@ class GradientBasedSolverTest : public MultiDeviceTest<TypeParam> {
       seed_(1701), num_(4), channels_(3), height_(10), width_(10),
       constant_data_(false), share_(false) {}
 
+  string snapshot_prefix_;
   shared_ptr<SGDSolver<Dtype> > solver_;
   int seed_;
   int num_, channels_, height_, width_;
@@ -38,9 +40,6 @@ class GradientBasedSolverTest : public MultiDeviceTest<TypeParam> {
   virtual void InitSolverFromProtoString(const string& proto) {
     SolverParameter param;
     CHECK(google::protobuf::TextFormat::ParseFromString(proto, &param));
-    // Disable saving a final snapshot so the tests don't pollute the user's
-    // working directory with useless snapshots.
-    param.set_snapshot_after_train(false);
     // Set the solver_mode according to current Caffe::mode.
     switch (Caffe::mode()) {
       case Caffe::CPU:
@@ -57,11 +56,13 @@ class GradientBasedSolverTest : public MultiDeviceTest<TypeParam> {
          param.delta() : 0;
   }
 
-  void RunLeastSquaresSolver(const Dtype learning_rate,
+  string RunLeastSquaresSolver(const Dtype learning_rate,
       const Dtype weight_decay, const Dtype momentum, const int num_iters,
-      const int iter_size = 1) {
+      const int iter_size = 1, const bool snapshot = false,
+      const char* from_snapshot = NULL) {
     ostringstream proto;
     proto <<
+       "snapshot_after_train: " << snapshot << " "
        "max_iter: " << num_iters << " "
        "base_lr: " << learning_rate << " "
        "lr_policy: 'fixed' "
@@ -170,9 +171,30 @@ class GradientBasedSolverTest : public MultiDeviceTest<TypeParam> {
     if (momentum != 0) {
       proto << "momentum: " << momentum << " ";
     }
+    MakeTempDir(&snapshot_prefix_);
+    proto << "snapshot_prefix: '" << snapshot_prefix_ << "/' ";
+    if (snapshot) {
+      proto << "snapshot: " << num_iters << " ";
+    }
     Caffe::set_random_seed(this->seed_);
     this->InitSolverFromProtoString(proto.str());
+    Caffe::set_random_seed(this->seed_);
+    if (from_snapshot != NULL) {
+      this->solver_->Restore(from_snapshot);
+      vector<Blob<Dtype>*> empty_bottom_vec;
+      for (int i = 0; i < this->solver_->iter(); ++i) {
+        this->solver_->net()->Forward(empty_bottom_vec);
+      }
+    }
     this->solver_->Solve();
+    if (snapshot) {
+      ostringstream resume_file;
+      resume_file << snapshot_prefix_ << "/_iter_" << num_iters
+                  << ".solverstate";
+      string resume_filename = resume_file.str();
+      return resume_filename;
+    }
+    return string();
   }
 
   // Compute an update value given the current state of the train net,
