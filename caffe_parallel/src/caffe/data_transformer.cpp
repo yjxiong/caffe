@@ -82,7 +82,7 @@ void fillCropSize(int input_height, int input_width,
         int crop_w = int(base_size * scale_rates[w]);
         crop_w = (abs(crop_w - net_input_width) < 3)?net_input_width:crop_w;
 
-        //append this cropping size into the list
+        //append this cropping size intocmd the list
         if (abs(h-w)<=max_distort) {
           crop_sizes.push_back(pair<int, int>(crop_h, crop_w));
         }
