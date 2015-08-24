@@ -41,7 +41,8 @@ def parse_args():
                         default=None, type=str)
     parser.add_argument('--imdb', dest='imdb_name',
                         help='dataset to train on',
-                        default='voc_2007_trainval', type=str)
+                        # default='voc_2007_trainval', type=str)
+                        default='voc_2012_trainval', type=str)
     parser.add_argument('--rand', dest='randomize',
                         help='randomize (do not use a fixed seed)',
                         action='store_true')
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     if not args.randomize:
         # fix the random seeds (numpy and caffe) for reproducibility
         np.random.seed(cfg.RNG_SEED)
-        caffe.set_random_seed(cfg.RNG_SEED)
+        # caffe.set_random_seed(cfg.RNG_SEED)
 
     # set up caffe
     caffe.set_mode_gpu()
