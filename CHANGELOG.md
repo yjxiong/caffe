@@ -1,3 +1,12 @@
+## Apr 27, 2016
+
+Features:
+
+  - Supported cuDNN v5
+  - Use the cuDNN's BatchNormalization implementation as the default engine for BN layer
+  - BN layer will now store running variance in its fourth blob.
+  - the script `python/bn_convert_style.py` is added to help converting the bn style forth and back.
+
 ## Dec 23, 2015
 
 Features:

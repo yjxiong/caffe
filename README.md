@@ -5,6 +5,8 @@
 This branch hosts the code for the technical report ["Towards Good Practices for Very Deep Two-stream ConvNets"](http://arxiv.org/abs/1507.02159), and more.
 
 ### Updates
+- Apr 27, 2016
+  * cuDNN v5 support, featuring the super fast WINOGrad Convolution and cuDNN implementation of BatchNormalization.
 - Dec 23, 2015
   * Refactored cudnn wrapper to control overall memory consumption. Will automatically find the best algorithm combination under memory constraint.
 - Dec 17, 2015
@@ -38,8 +40,8 @@ Please see following instruction for accessing features above. More detailed doc
   - Set `multi_scale` to `true` in `transform_param`
   - In `transform_param`, specify `scale_ratios` as a list of floats smaller than one, default is `[1, .875, .75, .65]`
   - In `transform_param`, specify `max_distort` to an integer, which will limit the aspect ratio distortion, default to `1`
-- cuDNN v4
- - The cuDNN v4 wrapper has optimized engines for convolution and batch normalization.
+- cuDNN v5
+ - The cuDNN v5 wrapper has optimized engines for convolution and batch normalization.
  - The solver protobuf config has a parameter `richness` which specifies the total GPU memory in MBs available to the cudnn convolution engine as workspaces. Default `richness` is 300 (300MB). Using this parameter you can control the GPU memory consumption of training, the system will find the best setup under the memory limit for you.
 - Training with multiple GPUs
   - Requires OpenMPI > 1.7.4 ([Why?](https://www.open-mpi.org/faq/?category=runcuda)). **Remember to compile your OpenMPI with option `--with-cuda`**
