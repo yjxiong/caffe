@@ -220,6 +220,9 @@ class Net {
   /// @brief Get misc parameters, e.g. the LR multiplier and weight decay.
   void GetLearningRateAndWeightDecay();
 
+  /// @brief do a dry run to decide blob dependency
+  void MemoryOptimize();
+
   /// @brief The network name
   string name_;
   /// @brief The phase: TRAIN or TEST
@@ -267,6 +270,9 @@ class Net {
   size_t memory_used_;
   /// Whether to compute and display debug info for the net.
   bool debug_info_;
+
+  vector< shared_ptr<SyncedMemory> > shared_diff_storage_;
+  vector< shared_ptr<SyncedMemory> > shared_data_storage_;
 
   DISABLE_COPY_AND_ASSIGN(Net);
 };

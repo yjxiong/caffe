@@ -308,6 +308,11 @@ class Layer {
   inline void set_need_sync(bool val){need_sync_ = val;}
   #endif
 
+  /**
+   * @brief express whether this layer shares the diff between bottom and top
+   */
+  virtual inline bool is_sharing_diff(int top_id, int bottom_id){return false;}
+
 
  protected:
   /** The protobuf that stores the layer parameters */

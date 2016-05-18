@@ -262,6 +262,10 @@ class Blob {
    * shared_ptr calls its destructor when reset with the "=" operator.
    */
   void ShareDiff(const Blob& other);
+  bool IsSharingDiff(const Blob* other);
+
+  void SetDiffStorage(shared_ptr<SyncedMemory>& storage);
+  void SetDataStorage(shared_ptr<SyncedMemory>& storage);
 
   bool ShapeEquals(const BlobProto& other);
 

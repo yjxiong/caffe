@@ -56,6 +56,7 @@ class SyncedMemory {
   SyncedHead head() { return head_; }
   size_t size() { return size_; }
 
+  void Resize(size_t new_size);
  private:
   void to_cpu();
   void to_gpu();

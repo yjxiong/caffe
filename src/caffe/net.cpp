@@ -293,6 +293,11 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   debug_info_ = param.debug_info();
   LOG(INFO) << "Network initialization done.";
   LOG(INFO) << "Memory required for data: " << memory_used_ * sizeof(Dtype);
+
+  // optimize memory
+  if (phase_ == TRAIN && !debug_info_ && param.optimize_mem()){
+    MemoryOptimize();
+  }
 }
 
 template <typename Dtype>
@@ -624,8 +629,22 @@ void Net<Dtype>::BackwardFromTo(int start, int end) {
 
   for (int i = start; i >= end; --i) {
     if (layer_need_backward_[i]) {
+
+      //DEBUG USE
+//      for (int x = 0; x < top_vecs_[i].size(); ++x){
+//        LOG(INFO)<<"Layer "<<i<<" name "<<layer_names_[i]
+//          <<" top blob "<<x<<" ptr: "<<top_vecs_[i][x]->gpu_diff();
+//      }
+//
+//      for (int x = 0; x < bottom_vecs_[i].size(); ++x){
+//        LOG(INFO)<<"Layer "<<i<<" name "<<layer_names_[i]
+//          <<" bottom blob "<<x<<" ptr: "<<bottom_vecs_[i][x]->mutable_gpu_diff();
+//      }
+      //END DEBUG
+
       layers_[i]->Backward(
           top_vecs_[i], bottom_need_backward_[i], bottom_vecs_[i]);
+
       if (debug_info_) { BackwardDebugInfo(i); }
 
 #ifdef USE_MPI
@@ -942,6 +961,185 @@ const shared_ptr<Layer<Dtype> > Net<Dtype>::layer_by_name(
   return layer_ptr;
 }
 
+template <typename Dtype>
+class BlobMeta {
+public:
+    BlobMeta(Blob<Dtype>* blob, int ref, int layer_id){
+      blob_ = blob;
+      ref_ = ref;
+      layer_id_ = layer_id;
+    }
+
+    BlobMeta():blob_(NULL), ref_(0), layer_id_(-1){};
+
+    inline void DerefOne(){
+      CHECK_GT(ref_, 0);
+      ref_ -= 1;
+      if (ref_ == 0){
+        blob_ = NULL;
+        layer_id_ = -1;
+      }
+    }
+
+    inline void IncRef(){ref_ += 1;}
+
+    void RefBlob(Blob<Dtype>* blob, int ref, int layer_id){
+      CHECK(blob_==NULL);
+      CHECK_NE(blob, blob_);
+      CHECK_GT(ref, 0);
+      blob_ = blob;
+      ref_ = ref;
+      layer_id_ = layer_id;
+    }
+
+    inline bool Empty(){
+      return blob_ == NULL;
+    }
+
+    inline bool isBlob(Blob<Dtype>* blob){return blob_==blob;}
+
+private:
+    Blob<Dtype>* blob_;
+    int ref_;
+    int layer_id_;
+};
+
+template <typename Dtype>
+size_t AcquireSlot(vector<BlobMeta<Dtype> >& slot_vec, Blob<Dtype>* blob, int ref, int layer_id){
+  for (size_t i = 0 ; i < slot_vec.size(); ++i){
+    if (slot_vec[i].Empty()){
+      slot_vec[i].RefBlob(blob, ref, layer_id);
+      return i;
+    }
+  }
+
+  // no available slot, need a new one
+  slot_vec.push_back(BlobMeta<Dtype>(blob, ref, layer_id));
+
+  return slot_vec.size() - 1;
+}
+
+template <typename Dtype>
+int FindBlob(vector<BlobMeta<Dtype> >& slot_vec, Blob<Dtype>* blob){
+  for (int i = 0; i < slot_vec.size(); ++i){
+    if (slot_vec[i].isBlob(blob)){
+      return i;
+    }
+  }
+  return -1;
+}
+
+template <typename Dtype>
+void Net<Dtype>::MemoryOptimize() {
+  // Dry run phase
+  // In this phase, we assume the network topology has been setup
+  boost::unordered_map<Blob<Dtype>*, int> blob_log;
+
+  vector<BlobMeta<Dtype> > slots;
+
+
+
+  for (int i = (layers_.size() -1); i >=0; --i){
+    vector<Blob<Dtype>* >& layer_top = top_vecs_[i];
+    vector<Blob<Dtype>* >& layer_bottom = bottom_vecs_[i];
+
+    LOG(INFO)<<"layer id: "<<i<<" name: "<<layer_names_[i];
+
+    // first deal with bottoms
+    for (int i_bottom = 0; i_bottom < layer_bottom.size(); ++i_bottom){
+      Blob<Dtype>* bottom = layer_bottom[i_bottom];
+      int idx = FindBlob(slots, bottom);
+      if (idx == -1){
+
+        //detect share diff conditions
+        bool sharing_diff = false;
+
+        for (int i_top = 0; i_top < layer_top.size(); ++i_top){
+          if(layers_[i]->is_sharing_diff(i_top, i_bottom)){
+            sharing_diff = true;
+            idx = FindBlob(slots, layer_top[i_top]);
+          }
+        }
+
+        if (!sharing_diff) {
+          idx = (int) AcquireSlot(slots, bottom, 1, i);
+          blob_log[bottom] = idx;
+          LOG(INFO) << "acquired slot for new blob";
+        }else{
+          LOG(INFO) << "sharing diff using slot "<<idx;
+          slots[idx].IncRef();
+        }
+      }else{
+        // bottom is already registered
+        // usually this means in-place operation
+        slots[idx].IncRef();
+      }
+      LOG(INFO)<<"bottom blob "<<i_bottom<<" ptr "<<bottom<<" slot id "<<idx;
+
+    }
+
+
+    // then deal with top
+    for (int i_top = 0; i_top < layer_top.size(); ++i_top){
+      Blob<Dtype>* top = layer_top[i_top];
+
+      // find the top in the slotsp
+      int idx = FindBlob(slots, top);
+
+      // look for shared diff
+      if (blob_log.find(top) != blob_log.end()){
+        idx = blob_log[top];
+      }
+      if (idx == -1){
+        //top blob not found in the table
+        // then acquire one slot for it
+        if (!layers_[i]->loss(i_top)) {
+          idx = (int) AcquireSlot(slots, top, 1, i);
+          blob_log[top] = idx;
+          LOG(INFO) << "acquired slot for new output blob";
+        }
+      }
+
+      //after the layer's operation, the refcount of top should be decreased by 1
+      if (idx != -1)
+        slots[idx].DerefOne();
+
+      LOG(INFO)<<"top blob "<<i_top<<" ptr "<<top<<" slot id "<<idx;
+    }
+
+
+  }
+
+  // Memory assignment phase
+  shared_diff_storage_.resize(slots.size());
+  for (int i_mem = 0; i_mem < shared_diff_storage_.size(); i_mem++){
+    shared_diff_storage_[i_mem].reset(new SyncedMemory(1));
+  }
+
+  size_t count_raw = 0;
+  size_t count_opt = 0;
+  for (int i_blob = 0; i_blob < blobs_.size(); ++i_blob){
+    if (blob_log.find(blobs_[i_blob].get()) == blob_log.end()){
+      // loss blob cannot be shared due to loss weight
+      continue;
+    }
+    int idx = blob_log[blobs_[i_blob].get()];
+    blobs_[i_blob]->SetDiffStorage(shared_diff_storage_[idx]);
+    LOG(INFO)<<"blob "<<i_blob<<" name "<<blob_names_[i_blob]<<" idx "<<idx;
+
+    //recover the necessary mem size for the blob
+    shared_diff_storage_[idx]->Resize(blobs_[i_blob]->count() * sizeof(Dtype));
+    count_raw += blobs_[i_blob]->count() * sizeof(Dtype);
+  }
+
+  for (int i_mem = 0; i_mem < shared_diff_storage_.size(); i_mem++){
+    count_opt = shared_diff_storage_[i_mem]->size();
+  }
+
+  LOG(INFO)<<"raw memory "<<count_raw<<" opt memory "<<count_opt;
+
+//  LOG(FATAL)<<"";
+}
 INSTANTIATE_CLASS(Net);
 
 }  // namespace caffe

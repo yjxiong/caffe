@@ -271,11 +271,11 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
    *  The latter approach is prone to problem and has issues in memory alignment
    **/
   size_t workspaceSizeInBytes_fwd;  // size of underlying storage
-  vector<shared_ptr<SyncedMemory> > workspaceData_fwd;  // underlying storage
+  static vector<shared_ptr<SyncedMemory> > workspaceData_fwd;  // underlying storage
 
   size_t workspaceSizeInBytes_bwd;  // size of underlying storage
-  vector<shared_ptr<SyncedMemory> > workspaceData_bwd_filter;  // underlying storage
-  vector<shared_ptr<SyncedMemory> > workspaceData_bwd_data;  // underlying storage
+  static vector<shared_ptr<SyncedMemory> > workspaceData_bwd_filter;  // underlying storage
+  static vector<shared_ptr<SyncedMemory> > workspaceData_bwd_data;  // underlying storage
 
   vector<vector<int> > prev_bottom_shapes_;
 
