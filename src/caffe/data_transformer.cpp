@@ -40,6 +40,7 @@ DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param,
   for (int i = 0; i < param_.scale_ratios_size(); ++i){
     custom_scale_ratios_.push_back(param_.scale_ratios(i));
   }
+  org_size_proc_ = param.original_image();
 }
 
 
@@ -100,6 +101,46 @@ void fillCropSize(int input_height, int input_width,
         }
       }
     }
+}
+
+/**
+ * @generate crop size and offset when process original images
+ */
+void sampleRandomCropSize(int img_height, int img_width,
+                          int& crop_height, int& crop_width,
+                          float min_scale=0.08, float max_scale=1.0, float min_as=0.75, float max_as=1.33){
+  float total_area = img_height * img_width;
+  float area_ratio = 0;
+  float target_area = 0;
+  float aspect_ratio = 0;
+  float flip_coin = 0;
+
+  int attempt = 0;
+
+  while (attempt < 10) {
+    // sample scale and area
+    caffe_rng_uniform(1, min_scale, max_scale, &area_ratio);
+    target_area = total_area * area_ratio;
+
+    caffe_rng_uniform(1, float(0), float(1), &flip_coin);
+    if (flip_coin > 0.5){
+        std::swap(crop_height, crop_width);
+    }
+
+    // sample aspect ratio
+    caffe_rng_uniform(1, min_as, max_as, &aspect_ratio);
+    crop_height = int(sqrt(target_area / aspect_ratio));
+    crop_width = int(sqrt(target_area * aspect_ratio));
+
+    if (crop_height <= img_height && crop_width <= img_width){
+      return;
+    }
+    attempt ++;
+  }
+
+  // fallback to normal 256-224 style size crop
+  crop_height = img_height / 8 * 7;
+  crop_width = img_width / 8 * 7;
 }
 
 
@@ -381,8 +422,11 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   const int num = transformed_blob->num();
 
   CHECK_EQ(channels, img_channels);
-  CHECK_LE(height, img_height);
-  CHECK_LE(width, img_width);
+
+  if (!org_size_proc_) {
+    CHECK_LE(height, img_height);
+    CHECK_LE(width, img_width);
+  }
   CHECK_GE(num, 1);
 
   CHECK(cv_img.depth() == CV_8U) << "Image data type must be unsigned byte";
@@ -399,8 +443,10 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   cv::Mat cv_cropped_img;
 
   CHECK_GT(img_channels, 0);
-  CHECK_GE(img_height, crop_size);
-  CHECK_GE(img_width, crop_size);
+  if (!org_size_proc_) {
+    CHECK_GE(img_height, crop_size);
+    CHECK_GE(img_width, crop_size);
+  }
 
   Dtype *mean = NULL;
   if (has_mean_file) {
@@ -426,50 +472,78 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   int crop_height = 0;
   int crop_width = 0;
 
-  if (crop_size) {
+  if (!org_size_proc_) {
+    if (crop_size) {
+      CHECK_EQ(crop_size, height);
+      CHECK_EQ(crop_size, width);
+      // We only do random crop when we do training.
+      if (phase_ == TRAIN) {
+        if (do_multi_scale) {
+          fillCropSize(img_height, img_width, crop_size, crop_size, crop_size_pairs,
+                       max_distort_, custom_scale_ratios_);
+          int sel = Rand(crop_size_pairs.size());
+          crop_height = crop_size_pairs[sel].first;
+          crop_width = crop_size_pairs[sel].second;
+        } else {
+          crop_height = crop_size;
+          crop_width = crop_size;
+        }
+        if (param_.fix_crop()) {
+          fillFixOffset(img_height, img_width, crop_height, crop_width,
+                        param_.more_fix_crop(), offset_pairs);
+          int sel = Rand(offset_pairs.size());
+          h_off = offset_pairs[sel].first;
+          w_off = offset_pairs[sel].second;
+        } else {
+          h_off = Rand(img_height - crop_height + 1);
+          w_off = Rand(img_width - crop_width + 1);
+        }
+      } else {
+        h_off = (img_height - crop_size) / 2;
+        w_off = (img_width - crop_size) / 2;
+        crop_width = crop_size;
+        crop_height = crop_size;
+      }
+      cv::Rect roi(w_off, h_off, crop_width, crop_height);
+      // if resize needed, first put the resized image into a buffer, then copy back.
+      if (do_multi_scale && ((crop_height != crop_size) || (crop_width != crop_size))) {
+        cv::Mat crop_bufferM(cv_img, roi);
+        cv::resize(crop_bufferM, cv_cropped_img, cv::Size(crop_size, crop_size));
+        crop_bufferM.release();
+      } else {
+        cv_cropped_img = cv_img(roi);
+      }
+    } else {
+      CHECK_EQ(img_height, height);
+      CHECK_EQ(img_width, width);
+      cv_cropped_img = cv_img;
+    }
+  }else{
+    CHECK(crop_size>0)<<"in original image processing mode, crop size must be specified";
     CHECK_EQ(crop_size, height);
     CHECK_EQ(crop_size, width);
-    // We only do random crop when we do training.
     if (phase_ == TRAIN) {
-      if (do_multi_scale) {
-        fillCropSize(img_height, img_width, crop_size, crop_size, crop_size_pairs,
-                     max_distort_, custom_scale_ratios_);
-        int sel = Rand(crop_size_pairs.size());
-        crop_height = crop_size_pairs[sel].first;
-        crop_width = crop_size_pairs[sel].second;
-      } else {
-        crop_height = crop_size;
-        crop_width = crop_size;
-      }
-      if (param_.fix_crop()) {
-        fillFixOffset(img_height, img_width, crop_height, crop_width,
-                      param_.more_fix_crop(), offset_pairs);
-        int sel = Rand(offset_pairs.size());
-        h_off = offset_pairs[sel].first;
-        w_off = offset_pairs[sel].second;
-      } else {
-        h_off = Rand(img_height - crop_height + 1);
-        w_off = Rand(img_width - crop_width + 1);
-      }
-    } else {
-      h_off = (img_height - crop_size) / 2;
-      w_off = (img_width - crop_size) / 2;
-      crop_width = crop_size;
-      crop_height = crop_size;
+      // in training, we randomly crop different sized crops
+      sampleRandomCropSize(img_height, img_width, crop_height, crop_width);
+
+
+
+      h_off = (crop_height < img_height)?Rand(img_height - crop_height):0;
+      w_off = (crop_width < img_width)?Rand(img_width - crop_width):0;
+    }else{
+      // in testing, we first resize the image to sizeof (8/7*crop_size) then crop the central patch
+      h_off = img_height / 14;
+      w_off = img_width / 14;
+      crop_height = img_height / 8 * 7;
+      crop_width = img_width / 8 * 7;
     }
+
     cv::Rect roi(w_off, h_off, crop_width, crop_height);
-    // if resize needed, first put the resized image into a buffer, then copy back.
-    if (do_multi_scale && ((crop_height != crop_size) || (crop_width != crop_size))) {
-      cv::Mat crop_bufferM(cv_img, roi);
-      cv::resize(crop_bufferM, cv_cropped_img, cv::Size(crop_size, crop_size));
-      crop_bufferM.release();
-    } else {
-      cv_cropped_img = cv_img(roi);
-    }
-  } else {
-    CHECK_EQ(img_height, height);
-    CHECK_EQ(img_width, width);
-    cv_cropped_img = cv_img;
+
+    // resize is always needed in original image mode
+    cv::Mat crop_bufferM(cv_img, roi);
+    cv::resize(crop_bufferM, cv_cropped_img, cv::Size(crop_size, crop_size), 0, 0, CV_INTER_CUBIC);
+    crop_bufferM.release();
   }
 
   CHECK(cv_cropped_img.data);
@@ -689,8 +763,10 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const cv::Mat& cv_img) {
   const int img_width = cv_img.cols;
   // Check dimensions.
   CHECK_GT(img_channels, 0);
-  CHECK_GE(img_height, crop_size);
-  CHECK_GE(img_width, crop_size);
+  if (!org_size_proc_) {
+    CHECK_GE(img_height, crop_size);
+    CHECK_GE(img_width, crop_size);
+  }
   // Build BlobShape.
   vector<int> shape(4);
   shape[0] = 1;

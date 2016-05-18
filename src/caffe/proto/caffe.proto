@@ -402,6 +402,10 @@ message TransformationParameter {
 
   //if set to true, it is optical flow field
   optional bool is_flow = 14 [default = false];
+
+  //if set to true, will use original image processing mode
+  // i.e. will use Inception style data augmentation
+  optional bool original_image = 20 [ default = false];
 }
 
 // Message that stores parameters shared by loss layers

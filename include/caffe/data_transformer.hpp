@@ -146,6 +146,8 @@ class DataTransformer {
 
   vector<float> custom_scale_ratios_;
   int max_distort_;
+
+  bool org_size_proc_;
 };
 
 }  // namespace caffe
