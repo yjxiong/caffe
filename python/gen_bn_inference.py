@@ -5,7 +5,32 @@ import os.path as osp
 import google.protobuf as pb
 from argparse import ArgumentParser
 
+pycaffe_dir = osp.dirname(__file__)
+if osp.join(pycaffe_dir) not in sys.path:
+    sys.path.insert(0, pycaffe_dir)
 import caffe
+from caffe.proto import caffe_pb2
+
+
+def update_blob_name(blobs, old, new):
+    if old not in blobs: return
+    names = list(blobs)
+    names[names.index(old)] = new
+    del(blobs[:])
+    blobs.extend(names)
+
+
+def check(old_net, new_net, input_name='data'):
+    caffe.set_device(0)
+    caffe.set_mode_gpu()
+    inputs = np.random.rand(*old_net.blobs[input_name].data.shape)
+    inputs = inputs.astype(np.float32)
+    old_net.blobs[input_name].data[...] = inputs
+    new_net.blobs[input_name].data[...] = inputs
+    ans = old_net.forward()
+    out = new_net.forward()
+    for k in ans:
+        assert np.allclose(ans[k], out[k]), "Conversion failed"
 
 
 def main(args):
@@ -17,79 +42,112 @@ def main(args):
         file_name = osp.splitext(args.weights)[0]
         args.output_weights = file_name + '_inference.caffemodel'
     with open(args.model) as f:
-        model = caffe.proto.caffe_pb2.NetParameter()
+        model = caffe_pb2.NetParameter()
         pb.text_format.Parse(f.read(), model)
 
-    # Get the BN layers to be absorbed
-    to_be_absorbed = []
+    # Determince the BN layers to be absorbed or replaced
+    # Create the new layers
+    new_layers = []
+    absorbed, replaced = {}, {}
     for i, layer in enumerate(model.layer):
-        if layer.type != 'BN': continue
-        bottom = layer.bottom[0]
-        top = layer.top[0]
-        can_be_absorbed = True
+        if layer.type != 'BN':
+            new_layers.append(layer)
+            continue
+        assert len(layer.bottom) == 1
+        assert len(layer.top) == 1
+        bottom_blob = layer.bottom[0]
+        top_blob = layer.top[0]
+        # Check if can be absorbed. As there could be some inplace layers,
+        # for example, conv -> relu -> bn. In such case, the BN cannot be
+        # absorbed.
+        can_be_absorbed = False
         for j in xrange(i - 1, -1, -1):
-            bottom_layer = model.layer[j]
-            if bottom in bottom_layer.top:
-                if bottom_layer.type not in ['Convolution', 'InnerProduct']:
+            if bottom_blob in model.layer[j].top:
+                if model.layer[j].type not in ['Convolution', 'InnerProduct']:
                     can_be_absorbed = False
+                    break
+                else:
+                    can_be_absorbed = True
+                    bottom_layer = model.layer[j]
         if can_be_absorbed:
-            to_be_absorbed.append(layer.name)
-            # Rename the top blobs
+            # Rename the blob in the top layers
             for j in xrange(i + 1, len(model.layer)):
-                top_layer = model.layer[j]
-                if top in top_layer.bottom:
-                    names = list(top_layer.bottom)
-                    names[names.index(top)] = bottom
-                    del(top_layer.bottom[:])
-                    top_layer.bottom.extend(names)
-                if top in top_layer.top:
-                    names = list(top_layer.top)
-                    names[names.index(top)] = bottom
-                    del(top_layer.top[:])
-                    top_layer.top.extend(names)
-        else:
+                update_blob_name(model.layer[j].bottom, top_blob, bottom_blob)
+                update_blob_name(model.layer[j].top, top_blob, bottom_blob)
+            if bottom_layer.type == 'Convolution':
+                bottom_layer.convolution_param.bias_term = True
+            elif bottom_layer.type == 'InnerProduct':
+                bottom_layer.inner_product_param.bias_term = True
+            absorbed[layer.name] = bottom_layer.name
+        elif args.replace_by == 'affine':
+            # Replace by an scale bias layer
+            new_layer = caffe_pb2.LayerParameter()
+            new_layer.name = layer.name + '_affine'
+            new_layer.type = 'Scale'
+            new_layer.bottom.extend([bottom_blob])
+            new_layer.top.extend([top_blob])
+            new_layer.scale_param.bias_term = True
+            replaced[layer.name] = new_layer.name
+            new_layers.append(new_layer)
+        elif args.replace_by == 'frozen':
             # Freeze the BN layer
             layer.bn_param.frozen = True
             del(layer.param[:])
-            param = caffe.proto.caffe_pb2.ParamSpec()
+            param = caffe_pb2.ParamSpec()
             param.lr_mult = 0
             param.decay_mult = 0
             layer.param.extend([param] * 2)
+            new_layers.append(layer)
 
     # Save the prototxt
-    output_model_layers = [layer for layer in model.layer
-                           if layer.name not in to_be_absorbed]
-    output_model = caffe.proto.caffe_pb2.NetParameter()
+    output_model = caffe_pb2.NetParameter()
     output_model.CopyFrom(model)
     del(output_model.layer[:])
-    output_model.layer.extend(output_model_layers)
+    output_model.layer.extend(new_layers)
     with open(args.output_model, 'w') as f:
         f.write(pb.text_format.MessageToString(output_model))
 
-    # Absorb the BN parameters
+    # Copy the parameters
     weights = caffe.Net(args.model, args.weights, caffe.TEST)
-    for i, layer in enumerate(model.layer):
-        if layer.name not in to_be_absorbed: continue
-        scale, bias, mean, tmp = [p.data.ravel()
-                                  for p in weights.params[layer.name]]
-        if args.bn_style == 'invstd':
-            invstd = tmp
-        else:
-            invstd = np.sqrt(tmp + args.epsilon)
-        for j in xrange(i - 1, -1, -1):
-            bottom_layer = model.layer[j]
-            if layer.bottom[0] in bottom_layer.top:
-                W, b = weights.params[bottom_layer.name]
-                num = W.data.shape[0]
-                W.data[...] = (W.data * scale[:, None, None, None]
-                                      * invstd[:, None, None, None])
-                b.data[...] = (b.data[...] - mean) * scale * invstd + bias
+    output_weights = caffe.Net(args.output_model, caffe.TEST)
+    for name in np.intersect1d(weights.params.keys(),
+                               output_weights.params.keys()):
+        # Some original conv / inner product layers do not have bias_term
+        for i in xrange(min(len(weights.params[name]),
+                            len(output_weights.params[name]))):
+            output_weights.params[name][i].data[...] = \
+                weights.params[name][i].data.copy()
+
+    # Absorb the BN parameters
+    for old, new in absorbed.iteritems():
+        scale, bias, mean, tmp = [p.data.ravel() for p in weights.params[old]]
+        invstd = tmp if args.bn_style == 'invstd' else \
+                 np.power(tmp + args.epsilon, -0.5)
+        W, b = output_weights.params[new]
+        assert W.data.ndim == 4 or W.data.ndim == 2
+        assert b.data.ndim == 1
+        if W.data.ndim == 4:
+            W.data[...] = (W.data * scale[:, None, None, None]
+                                  * invstd[:, None, None, None])
+        elif W.data.ndim == 2:
+            W.data[...] = W.data * scale[:, None] * invstd[:, None]
+        b.data[...] = (b.data[...] - mean) * scale * invstd + bias
+
+    # Fill up the affine layers
+    for old, new in replaced.iteritems():
+        scale, bias, mean, tmp = [p.data.ravel() for p in weights.params[old]]
+        invstd = tmp if args.bn_style == 'invstd' else \
+                 np.power(tmp + args.epsilon, -0.5)
+        W, b = output_weights.params[new]
+        assert W.data.ndim == 1
+        assert b.data.ndim == 1
+        W.data[...] = scale * invstd
+        b.data[...] = bias - scale * mean * invstd
+
+    # Check if the conversion is correct
+    check(weights, output_weights)
 
     # Save the caffemodel
-    output_weights = caffe.Net(args.output_model, caffe.TEST)
-    for name in output_weights.params:
-        for i in xrange(len(output_weights.params[name])):
-            output_weights.params[name][i].data[...] = weights.params[name][i].data.copy()
     output_weights.save(args.output_weights)
 
 
@@ -104,5 +162,10 @@ if __name__ == '__main__':
                         choices=['var', 'invstd'])
     parser.add_argument('--epsilon', type=float, default=1e-5,
                         help="The epsilon only used when bn_style is 'var'")
+    parser.add_argument('--replace_by', type=str, default='affine',
+                        choices=['affine', 'frozen'],
+                        help="When a BN layer cannot be absorbed, replace it "
+                             "by either affine (scale + bias) layers or a "
+                             "frozen BN layer")
     args = parser.parse_args()
     main(args)
