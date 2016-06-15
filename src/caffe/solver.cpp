@@ -382,12 +382,8 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.snapshot_after_train()
       && (!param_.snapshot() || iter_ % param_.snapshot() != 0)) {
 
-    #ifndef USE_MPI
     Snapshot();
-    #else
-    if (Caffe::MPI_my_rank() == 0){
-      Snapshot();
-    }
+    #ifdef USE_MPI
     if (Caffe::parallel_mode() == Caffe::MPI){
       //Stop the world to wait for the master process to finish snapshot
       //TODO: Send this to queue in blocking mode
@@ -490,6 +486,9 @@ void Solver<Dtype>::Test(const int test_net_id) {
 
 template <typename Dtype>
 void Solver<Dtype>::Snapshot() {
+#ifdef USE_MPI
+  if (Caffe::MPI_my_rank() != 0) return;
+#endif
   NetParameter net_param;
   // For intermediate results, we will also dump the gradient values.
   net_->ToProto(&net_param, param_.snapshot_diff());
