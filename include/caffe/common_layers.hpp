@@ -269,7 +269,9 @@ class FlattenLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
-
+  virtual inline bool is_sharing_data(int top_id, int bottom_id){
+    return top_id == bottom_id;
+  }
   virtual inline bool is_sharing_diff(int top_id, int bottom_id){
     return top_id == bottom_id;
   }
@@ -391,6 +393,9 @@ class ReshapeLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
+  virtual inline bool is_sharing_data(int top_id, int bottom_id) {
+    return top_id == bottom_id;
+  }
   virtual inline bool is_sharing_diff(int top_id, int bottom_id) {
     return top_id == bottom_id;
   }
@@ -570,6 +575,10 @@ class SplitLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int MinTopBlobs() const { return 1; }
 
+  virtual inline bool is_sharing_data(int top_id, int bottom_id) {
+    return true;
+  }
+
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
@@ -643,6 +652,13 @@ class SliceLayer : public Layer<Dtype> {
     virtual inline bool EqualNumBottomTopBlobs() const { return true; }
     virtual inline bool is_gathering() {return true;}
 
+    virtual inline bool is_sharing_data(int top_id, int bottom_id){
+#ifndef USE_MPI
+      return top_id == bottom_id;
+#else
+      return (top_id == bottom_id) && (Caffe::parallel_mode()!=Caffe::MPI);
+#endif
+    }
     virtual inline bool is_sharing_diff(int top_id, int bottom_id){
 #ifndef USE_MPI
       return top_id == bottom_id;
@@ -685,6 +701,13 @@ class SliceLayer : public Layer<Dtype> {
 
       virtual inline bool EqualNumBottomTopBlobs() const { return true; }
 
+      virtual inline bool is_sharing_data(int top_id, int bottom_id){
+#ifndef USE_MPI
+        return top_id == bottom_id;
+#else
+        return (top_id == bottom_id) && (Caffe::parallel_mode()!=Caffe::MPI);
+#endif
+      }
       virtual inline bool is_sharing_diff(int top_id, int bottom_id){
 #ifndef USE_MPI
         return top_id == bottom_id;
