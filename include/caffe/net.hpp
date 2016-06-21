@@ -271,8 +271,7 @@ class Net {
   /// Whether to compute and display debug info for the net.
   bool debug_info_;
 
-  vector< shared_ptr<SyncedMemory> > shared_diff_storage_;
-  vector< shared_ptr<SyncedMemory> > shared_data_storage_;
+  vector< shared_ptr<SyncedMemory> > shared_storage_;
 
   DISABLE_COPY_AND_ASSIGN(Net);
 };
