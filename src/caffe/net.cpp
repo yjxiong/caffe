@@ -1034,9 +1034,10 @@ void Net<Dtype>::MemoryOptimize() {
 
   // Forward pass
   for (int i = 0; i < layers_.size(); ++i) {
+    if (layers_[i]->layer_param().no_mem_opt()) continue;
     const vector<Blob<Dtype>* >& layer_top = top_vecs_[i];
     const vector<Blob<Dtype>* >& layer_bottom = bottom_vecs_[i];
-    LOG(INFO)<<"layer "<<i<<" "<<layer_names_[i];
+    LOG(INFO) << "layer " << i << " " << layer_names_[i];
     // Find slot for each bottom blob's data if not assigned yet (input blobs)
     for (int i_bottom = 0; i_bottom < layer_bottom.size(); ++i_bottom) {
       const string& bottom_name = blob_names_[bottom_id_vecs_[i][i_bottom]];
@@ -1047,7 +1048,7 @@ void Net<Dtype>::MemoryOptimize() {
       if (idx == -1) {
         idx = (int)AcquireSlot(slots, bottom_name + "_data", 1);
         slot_index[bottom_name + "_data"] = idx;
-        LOG(INFO)<<"bottom "<<bottom_name<<" acquire slot "<<idx;
+        LOG(INFO) << "bottom " << bottom_name << " acquires data slot " << idx;
       }
     }
     // Find slot for each top blob's data
@@ -1061,8 +1062,10 @@ void Net<Dtype>::MemoryOptimize() {
           if (layers_[i]->is_sharing_data(i_top, i_bottom)) {
             sharing_data = true;
             const string& bottom_name = blob_names_[bottom_id_vecs_[i][i_bottom]];
-            LOG(INFO)<<"bottom "<<bottom_name<<" shares data with top "<<top_name;
             idx = FindSlot(slots, bottom_name + "_data");
+            LOG(INFO) << "top " << top_name
+                      << " shares data with bottom " << bottom_name
+                      << " slot " << idx;
             break;
           }
         }
@@ -1070,15 +1073,16 @@ void Net<Dtype>::MemoryOptimize() {
           if (!layers_[i]->loss(i_top)) {
             idx = (int)AcquireSlot(slots, top_name + "_data", 1);
             slot_index[top_name + "_data"] = idx;
-            LOG(INFO)<<"top "<<top_name<<" acquire slot "<<idx;
+            LOG(INFO) << "top " << top_name << " acquires data slot " << idx;
           }
         } else {
           slots[idx].IncRef();
           slot_index[top_name + "_data"] = idx;
-          LOG(INFO)<<"top "<<top_name<<" shares data slot idx "<<idx<<" ref "<<slots[idx].ref();
         }
       } else {
+        // Top data blob is already assigned a slot (maybe inplace layer).
         slots[idx].IncRef();
+        LOG(INFO) << "top " << top_name << " refers to data slot " << idx;
       }
     }
     // Deref bottom blob's data slot if this layer does not propagate down.
@@ -1091,7 +1095,7 @@ void Net<Dtype>::MemoryOptimize() {
       }
       CHECK_GE(idx, 0);
       slots[idx].DerefOne();
-      LOG(INFO)<<"bottom "<<bottom_name<<" deref data slot idx "<<idx<<" ref "<<slots[idx].ref();
+      LOG(INFO) << "bottom " << bottom_name << " derefs data slot " << idx;
     }
   }
 
