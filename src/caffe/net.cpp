@@ -295,7 +295,11 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   LOG(INFO) << "Memory required for data: " << memory_used_ * sizeof(Dtype);
 
   // optimize memory
-  if (!debug_info_ && param.optimize_mem()){
+  const NetParameter_OptimizeMem om = param.optimize_mem();
+  const bool need_optimze_mem =
+    (om == NetParameter_OptimizeMem_TRAIN_ONLY && phase_ == TRAIN)
+    || (om == NetParameter_OptimizeMem_ALL_OPTIM);
+  if (!debug_info_ && need_optimze_mem) {
     MemoryOptimize();
   }
 }
@@ -1026,31 +1030,19 @@ int FindSlot(vector<SlotMeta>& slot_vec, const string& key){
 
 template <typename Dtype>
 void Net<Dtype>::MemoryOptimize() {
+
   // Dry run phase
   // In this phase, we assume the network topology has been setup
   boost::unordered_map<string, int> slot_index;
 
   vector<SlotMeta> slots;
 
-  // Forward pass
+  // Forward pass, try to reuse blobs' data memory
   for (int i = 0; i < layers_.size(); ++i) {
     if (layers_[i]->layer_param().no_mem_opt()) continue;
     const vector<Blob<Dtype>* >& layer_top = top_vecs_[i];
     const vector<Blob<Dtype>* >& layer_bottom = bottom_vecs_[i];
     LOG(INFO) << "layer " << i << " " << layer_names_[i];
-    // Find slot for each bottom blob's data if not assigned yet (input blobs)
-    for (int i_bottom = 0; i_bottom < layer_bottom.size(); ++i_bottom) {
-      const string& bottom_name = blob_names_[bottom_id_vecs_[i][i_bottom]];
-      int idx = FindSlot(slots, bottom_name + "_data");
-      if (slot_index.find(bottom_name + "_data") != slot_index.end()) {
-        idx = slot_index[bottom_name + "_data"];
-      }
-      if (idx == -1) {
-        idx = (int)AcquireSlot(slots, bottom_name + "_data", 1);
-        slot_index[bottom_name + "_data"] = idx;
-        LOG(INFO) << "bottom " << bottom_name << " acquires data slot " << idx;
-      }
-    }
     // Find slot for each top blob's data
     for (int i_top = 0; i_top < layer_top.size(); ++i_top) {
       const string& top_name = blob_names_[top_id_vecs_[i][i_top]];
@@ -1093,8 +1085,10 @@ void Net<Dtype>::MemoryOptimize() {
       if (slot_index.find(bottom_name + "_data") != slot_index.end()) {
         idx = slot_index[bottom_name + "_data"];
       }
-      CHECK_GE(idx, 0);
-      slots[idx].DerefOne();
+      if (idx >= 0) {
+        // idx == -1 if this is an input blob
+        slots[idx].DerefOne();
+      }
       LOG(INFO) << "bottom " << bottom_name << " derefs data slot " << idx;
     }
   }
@@ -1162,18 +1156,6 @@ void Net<Dtype>::MemoryOptimize() {
       LOG(INFO)<<"top blob "<<i_top
                <<" name "<<top_name<<" slot id "<<idx;
     }
-
-    /*
-    // Deref top blob's data
-    for (int i_top = 0; i_top < layer_top.size(); ++i_top) {
-      const string& top_name = blob_names_[top_id_vecs_[i][i_top]];
-      int idx = FindSlot(slots, top_name + "_data");
-      if (idx != -1) {
-        slots[idx].DerefOne();
-        LOG(INFO)<<"top blob "<<i_top<<" name "<<top_name<<" deref data "<<idx;
-      }
-    }
-    */
   }
 
   // Memory assignment phase
@@ -1187,20 +1169,28 @@ void Net<Dtype>::MemoryOptimize() {
   for (int i_blob = 0; i_blob < blobs_.size(); ++i_blob){
     const string& name = blob_names_[i_blob];
     const size_t bytes = blobs_[i_blob]->count() * sizeof(Dtype);
+    count_raw += bytes * 2;
+    int idx = -1;
     if (slot_index.find(name + "_data") != slot_index.end()) {
-      const int idx = slot_index[name + "_data"];
+      idx = slot_index[name + "_data"];
       blobs_[i_blob]->SetDataStorage(shared_storage_[idx]);
-      LOG(INFO)<<"blob "<<i_blob<<" name "<<blob_names_[i_blob]<<" data idx "<<idx;
       shared_storage_[idx]->Resize(bytes);
-      count_raw += bytes;
+    } else {
+      count_opt += bytes;
     }
+    LOG(INFO) << "blob " << i_blob
+              << " name " << blob_names_[i_blob]
+              << " data idx " << idx;
     if (slot_index.find(name + "_diff") != slot_index.end()) {
-      const int idx = slot_index[name + "_diff"];
+      idx = slot_index[name + "_diff"];
       blobs_[i_blob]->SetDiffStorage(shared_storage_[idx]);
-      LOG(INFO)<<"blob "<<i_blob<<" name "<<blob_names_[i_blob]<<" diff idx "<<idx;
       shared_storage_[idx]->Resize(bytes);
-      count_raw += bytes;
+    } else {
+      count_opt += bytes;
     }
+    LOG(INFO) << "blob " << i_blob
+              << " name " << blob_names_[i_blob]
+              << " diff idx " << idx;
   }
 
   for (int i_mem = 0; i_mem < shared_storage_.size(); i_mem++){
@@ -1209,7 +1199,7 @@ void Net<Dtype>::MemoryOptimize() {
     count_opt += shared_storage_[i_mem]->size();
   }
 
-  LOG(INFO)<<"raw memory "<<count_raw<<" opt memory "<<count_opt;
+  LOG(INFO) << "raw memory " << count_raw << " opt memory " << count_opt;
 }
 INSTANTIATE_CLASS(Net);
 
