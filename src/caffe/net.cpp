@@ -1030,7 +1030,6 @@ int FindSlot(vector<SlotMeta>& slot_vec, const string& key){
 
 template <typename Dtype>
 void Net<Dtype>::MemoryOptimize() {
-
   // Dry run phase
   // In this phase, we assume the network topology has been setup
   boost::unordered_map<string, int> slot_index;
@@ -1139,7 +1138,7 @@ void Net<Dtype>::MemoryOptimize() {
 
     // then deal with top
     for (int i_top = 0; i_top < layer_top.size(); ++i_top){
-      const string& top_name = blob_names_[top_id_vecs_[i][i_top]];
+      const string& top_name = blob_names_[layer_top_idx[i_top]];
 
       // find the top in the slots
       int idx = FindSlot(slots, top_name + "_diff");
@@ -1152,9 +1151,8 @@ void Net<Dtype>::MemoryOptimize() {
       if (idx != -1)
         slots[idx].DerefOne();
 
-      string blob_name = blob_names_[layer_top_idx[i_top]];
-      LOG(INFO)<<"top blob "<<i_top
-               <<" name "<<top_name<<" slot id "<<idx;
+      LOG(INFO) << "top blob " << i_top
+                << " name " << top_name << " slot id " << idx;
     }
   }
 
