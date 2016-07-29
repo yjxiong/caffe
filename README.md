@@ -60,7 +60,7 @@ mpirun -np 4 ./install/bin/caffe train --solver=<Your Solver File> [--weights=<P
 ### Working Examples
 - Real-time Action Recognition with Enhanced Motion Vector CNNs
   - [CVPR 2016 paper](https://wanglimin.github.io/papers/ZhangWWQW_CVPR16.pdf)
-  - [Project Size](http://zbwglory.github.io/MV-CNN/index.html)
+  - [Project Site](http://zbwglory.github.io/MV-CNN/index.html)
 - Action recognition on UCF101
   - [Project Site](http://personal.ie.cuhk.edu.hk/~xy012/others/action_recog/)
   - [Caffe Model Files](https://github.com/yjxiong/caffe/tree/action_recog/models/action_recognition)
