@@ -271,7 +271,9 @@ class Net {
   /// Whether to compute and display debug info for the net.
   bool debug_info_;
 
+  /// Memory optimization related stuff.
   vector< shared_ptr<SyncedMemory> > shared_storage_;
+  std::set<string> excluded_blob_names_;
 
   DISABLE_COPY_AND_ASSIGN(Net);
 };

@@ -67,6 +67,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   for (int input_id = 0; input_id < param.input_size(); ++input_id) {
     const int layer_id = -1;  // inputs have fake layer ID -1
     AppendTop(param, layer_id, input_id, &available_blobs, &blob_name_to_idx);
+
+    // input blobs are excluded from memory optimization by default
+    excluded_blob_names_.insert(param.input(input_id));
   }
   DLOG(INFO) << "Memory required for data: " << memory_used_ * sizeof(Dtype);
   // For each layer, set up its input and output
@@ -282,6 +285,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     LOG(INFO) << "This network produces output " << *it;
     net_output_blobs_.push_back(blobs_[blob_name_to_idx[*it]].get());
     net_output_blob_indices_.push_back(blob_name_to_idx[*it]);
+
+    // add output blob name to default excluded blobs
+    excluded_blob_names_.insert(*it);
   }
   for (size_t blob_id = 0; blob_id < blob_names_.size(); ++blob_id) {
     blob_names_index_[blob_names_[blob_id]] = blob_id;
@@ -295,10 +301,16 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   LOG(INFO) << "Memory required for data: " << memory_used_ * sizeof(Dtype);
 
   // optimize memory
-  const NetParameter_OptimizeMem om = param.optimize_mem();
   const bool need_optimze_mem =
-    (om == NetParameter_OptimizeMem_TRAIN_ONLY && phase_ == TRAIN)
-    || (om == NetParameter_OptimizeMem_ALL_OPTIM);
+    (param.mem_param().optimize_train() && phase_ == TRAIN)
+    || (param.mem_param().optimize_test() && phase_ == TEST);
+
+  // add additional specified blobs to the exclusion list
+  for (int ex_id = 0; ex_id < param.mem_param().exclude_blob_size(); ++ex_id){
+    excluded_blob_names_.insert(param.mem_param().exclude_blob(ex_id));
+  }
+
+  // launch memory optimization if necessary
   if (!debug_info_ && need_optimze_mem) {
     MemoryOptimize();
   }
@@ -1036,6 +1048,10 @@ int FindSlot(vector<SlotMeta>& slot_vec, const string& key){
   return -1;
 }
 
+inline bool check_exclude(const std::set<string>& exclude_list, const string& blob_name){
+  return exclude_list.find(blob_name) != exclude_list.end();
+}
+
 template <typename Dtype>
 void Net<Dtype>::MemoryOptimize() {
   // Dry run phase
@@ -1046,13 +1062,15 @@ void Net<Dtype>::MemoryOptimize() {
 
   // Forward pass, try to reuse blobs' data memory
   for (int i = 0; i < layers_.size(); ++i) {
-    if (layers_[i]->layer_param().no_mem_opt()) continue;
     const vector<Blob<Dtype>* >& layer_top = top_vecs_[i];
     const vector<Blob<Dtype>* >& layer_bottom = bottom_vecs_[i];
     LOG(INFO) << "layer " << i << " " << layer_names_[i];
     // Find slot for each top blob's data
     for (int i_top = 0; i_top < layer_top.size(); ++i_top) {
       const string& top_name = blob_names_[top_id_vecs_[i][i_top]];
+
+      if (check_exclude(excluded_blob_names_, top_name)) continue;
+
       int idx = FindSlot(slots, top_name + "_data");
       if (idx == -1) {
         // Detect share data conditions
@@ -1088,6 +1106,9 @@ void Net<Dtype>::MemoryOptimize() {
     if (phase_ == TRAIN && layer_need_backward_[i]) continue;
     for (int i_bottom = 0; i_bottom < layer_bottom.size(); ++i_bottom) {
       const string& bottom_name = blob_names_[bottom_id_vecs_[i][i_bottom]];
+
+      if (check_exclude(excluded_blob_names_, bottom_name)) continue;
+
       int idx = FindSlot(slots, bottom_name + "_data");
       if (slot_index.find(bottom_name + "_data") != slot_index.end()) {
         idx = slot_index[bottom_name + "_data"];
@@ -1113,8 +1134,10 @@ void Net<Dtype>::MemoryOptimize() {
     // first deal with bottoms
     for (int i_bottom = 0; i_bottom < layer_bottom.size(); ++i_bottom){
       const string& bottom_name = blob_names_[layer_bottom_idx[i_bottom]];
+
+      if (check_exclude(excluded_blob_names_, bottom_name)) continue;
+
       int idx = FindSlot(slots, bottom_name + "_diff");
-      if (!(layers_[i]->layer_param().no_mem_opt())){
       if (idx == -1){
         //detect share diff conditions
         bool sharing_diff = false;
@@ -1143,7 +1166,6 @@ void Net<Dtype>::MemoryOptimize() {
         // usually this means in-place operation
         slots[idx].IncRef();
       }
-      }
       LOG(INFO)<<"bottom blob "<<i_bottom<<" name "
                <<bottom_name<<" slot id "<<idx;
     }
@@ -1151,6 +1173,8 @@ void Net<Dtype>::MemoryOptimize() {
     // then deal with top
     for (int i_top = 0; i_top < layer_top.size(); ++i_top){
       const string& top_name = blob_names_[layer_top_idx[i_top]];
+
+      if (check_exclude(excluded_blob_names_, top_name)) continue;
 
       // find the top in the slots
       int idx = FindSlot(slots, top_name + "_diff");

@@ -89,13 +89,8 @@ message NetParameter {
   // connectivity and behavior, is specified as a LayerParameter.
   repeated LayerParameter layer = 100;  // ID 100 so layers are printed last.
 
-  // Whether to perform memory optimization
-  enum OptimizeMem {
-    NO_OPTIM = 0;
-    TRAIN_ONLY = 1;
-    ALL_OPTIM = 2;
-  }
-  optional OptimizeMem optimize_mem = 11 [default=TRAIN_ONLY];
+  // The configuration of memory optimization
+  optional MemoryOptimizationParameter mem_param = 200;
 
   // DEPRECATED: use 'layer' instead.
   repeated V1LayerParameter layers = 2;
@@ -322,7 +317,6 @@ message LayerParameter {
   // Parameters shared by loss layers.
   optional LossParameter loss_param = 101;
 
-  optional bool no_mem_opt = 900 [default = false];
   // Layer type-specific parameters.
   //
   // Note: certain layers may have more than one computational engine
@@ -1300,4 +1294,20 @@ message BiasParameter {
 message BatchReductionParameter {
     repeated int32 level = 1;
     optional ReductionParameter reduction_param = 2;
+}
+
+message MemoryOptimizationParameter {
+  // Mode of optimization
+
+  // whether to optimize for all nets specified in train phase
+  optional bool optimize_train = 1 [default = true];
+
+  // whether to optimize for all nets specified in test phase
+  optional bool optimize_test = 2 [default = false];
+
+  // By default, all blobs for input and output are excluded from the optimization for safety.
+  // However, one can also claim a few blobs to be excluded.
+  // This is rather helpful when extracting features from intermediate blobs or debugging problems.
+  repeated string exclude_blob = 3;
+
 }
