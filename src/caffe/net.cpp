@@ -1093,8 +1093,12 @@ void Net<Dtype>::MemoryOptimize() {
             LOG(INFO) << "top " << top_name << " acquires data slot " << idx;
           }
         } else {
-          slots[idx].IncRef();
-          slot_index[top_name + "_data"] = idx;
+          if (idx != -1) {
+            // idx == -1 means the top blob is (recursively) sharing data with an excluded bottom blob
+            // This makes this blob itself excluded from the optimization
+            slots[idx].IncRef();
+            slot_index[top_name + "_data"] = idx;
+          }
         }
       } else {
         // Top data blob is already assigned a slot (maybe inplace layer).
@@ -1155,8 +1159,8 @@ void Net<Dtype>::MemoryOptimize() {
         }else{
           LOG(INFO) << "sharing diff using slot "<<idx;
           if(idx != -1) {
-            // idx == -1 means this is an output blob
-            // as a good practice, we do not touch the output blobs' diff memroy cause leads to unwanted behaviors.
+            // idx == -1 means the bottom blob is (recursively) sharing diff with an excluded top blob
+            // This makes this blob itself excluded from the optimization
             slots[idx].IncRef();
             slot_index[bottom_name + "_diff"] = idx;
           }
