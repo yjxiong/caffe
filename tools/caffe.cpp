@@ -141,6 +141,22 @@ int train() {
           <<"If you would like to specify device id, please specify equal or more number of ids than the number of jobs";
         Caffe::SetDevice(solver_param.device_id(Caffe::MPI_my_rank()));
       }
+      // Check if group_id is specified.
+      if (solver_param.group_id_size() > 0) {
+        CHECK_GE(solver_param.group_id_size(), Caffe::MPI_all_rank())
+          << "If you would like to specifiy group id, please specify equal or more number of ids than the number of jobs";
+        std::map<int, int> count; // count how many processes in each group
+        int index; // index of the current process inside its group
+        for (int i = 0; i < solver_param.group_id_size(); ++i) {
+          if (i == Caffe::MPI_my_rank()) {
+            index = count[solver_param.group_id(i)];
+          }
+          ++count[solver_param.group_id(i)];
+        }
+        if (count.size() > 1) {
+          Caffe::MPI_split_comm(solver_param.group_id(Caffe::MPI_my_rank()), index);
+        }
+      }
     }else{
       Caffe::set_mode(Caffe::CPU);
     }

@@ -189,6 +189,12 @@ class Caffe {
   inline static int device_id(){return Get().device_id_;}
   inline static int remaining_sub_iter(){return Get().remaining_sub_iter_;}
   inline static void set_remaining_sub_iter(int n){Get().remaining_sub_iter_ = n;}
+
+  // Functions for splitting MPI_Comm to fast distributed training.
+  inline static void MPI_split_comm(const int color, const int key) {
+    MPI_Comm intra_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, color, key, &intra_comm);
+  }
 #endif
 
 #ifdef WITH_PYTHON_LAYER
