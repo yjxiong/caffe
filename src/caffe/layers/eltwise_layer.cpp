@@ -170,6 +170,8 @@ void EltwiseLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         if (this->phase_ == TRAIN) {
           if (rng_buffer_.cpu_data()[i] <= coeffs_[i]) {
             caffe_copy(count, top_diff, bottom_diff);
+          } else {
+            caffe_set(count, Dtype(0), bottom_diff);
           }
         } else {
           if (coeffs_[i] == Dtype(1)) {
