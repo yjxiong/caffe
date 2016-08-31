@@ -63,6 +63,22 @@ void EltwiseLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
           count, top_data, bottom[i]->gpu_data(), i-1, top_data, mask);
     }
     break;
+  case EltwiseParameter_EltwiseOp_STOCHASTIC_SUM:
+    caffe_gpu_set(count, Dtype(0.), top_data);
+    if (this->phase_ == TRAIN) {
+      caffe_rng_uniform(bottom.size(), Dtype(0), Dtype(1),
+                        rng_buffer_.mutable_cpu_data());
+      for (int i = 0; i < bottom.size(); ++i) {
+        if (rng_buffer_.cpu_data()[i] <= coeffs_[i]) {
+          caffe_gpu_axpy(count, Dtype(1), bottom[i]->gpu_data(), top_data);
+        }
+      }
+    } else {
+      for (int i = 0; i < bottom.size(); ++i) {
+        caffe_gpu_axpy(count, coeffs_[i], bottom[i]->gpu_data(), top_data);
+      }
+    }
+    break;
   default:
     LOG(FATAL) << "Unknown elementwise operation.";
   }
@@ -122,6 +138,19 @@ void EltwiseLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         MaxBackward<Dtype>  // NOLINT_NEXT_LINE(whitespace/operators)
             <<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
             count, top_diff, i, mask, bottom_diff);
+        break;
+      case EltwiseParameter_EltwiseOp_STOCHASTIC_SUM:
+        if (this->phase_ == TRAIN) {
+          if (rng_buffer_.cpu_data()[i] <= coeffs_[i]) {
+            caffe_copy(count, top_diff, bottom_diff);
+          }
+        } else {
+          if (coeffs_[i] == Dtype(1.)) {
+            caffe_copy(count, top_diff, bottom_diff);
+          } else {
+            caffe_gpu_scale(count, coeffs_[i], top_diff, bottom_diff);
+          }
+        }
         break;
       default:
         LOG(FATAL) << "Unknown elementwise operation.";

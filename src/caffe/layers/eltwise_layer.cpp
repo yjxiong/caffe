@@ -26,6 +26,12 @@ void EltwiseLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
   }
   stable_prod_grad_ = this->layer_param_.eltwise_param().stable_prod_grad();
+  // Random number buffer for stochastic sum operation.
+  if (this->layer_param().eltwise_param().operation() ==
+      EltwiseParameter_EltwiseOp_STOCHASTIC_SUM) {
+    vector<int> shape(1, bottom.size());
+    rng_buffer_.Reshape(shape);
+  }
 }
 
 template <typename Dtype>
@@ -92,6 +98,22 @@ void EltwiseLayer<Dtype>::Forward_cpu(
       }
     }
     break;
+  case EltwiseParameter_EltwiseOp_STOCHASTIC_SUM:
+    caffe_set(count, Dtype(0), top_data);
+    if (this->phase_ == TRAIN) {
+      caffe_rng_uniform(bottom.size(), Dtype(0), Dtype(1),
+                        rng_buffer_.mutable_cpu_data());
+      for (int i = 0; i < bottom.size(); ++i) {
+        if (rng_buffer_.cpu_data()[i] <= coeffs_[i]) {
+          caffe_axpy(count, Dtype(1), bottom[i]->cpu_data(), top_data);
+        }
+      }
+    } else {
+      for (int i = 0; i < bottom.size(); ++i) {
+        caffe_axpy(count, coeffs_[i], bottom[i]->cpu_data(), top_data);
+      }
+    }
+    break;
   default:
     LOG(FATAL) << "Unknown elementwise operation.";
   }
@@ -144,6 +166,18 @@ void EltwiseLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           bottom_diff[index] = gradient;
         }
         break;
+      case EltwiseParameter_EltwiseOp_STOCHASTIC_SUM:
+        if (this->phase_ == TRAIN) {
+          if (rng_buffer_.cpu_data()[i] <= coeffs_[i]) {
+            caffe_copy(count, top_diff, bottom_diff);
+          }
+        } else {
+          if (coeffs_[i] == Dtype(1)) {
+            caffe_copy(count, top_diff, bottom_diff);
+          } else {
+            caffe_cpu_scale(count, coeffs_[i], top_diff, bottom_diff);
+          }
+        }
       default:
         LOG(FATAL) << "Unknown elementwise operation.";
       }

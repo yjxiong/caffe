@@ -180,6 +180,7 @@ class EltwiseLayer : public Layer<Dtype> {
   EltwiseParameter_EltwiseOp op_;
   vector<Dtype> coeffs_;
   Blob<int> max_idx_;
+  Blob<Dtype> rng_buffer_;
 
   bool stable_prod_grad_;
 };
@@ -783,7 +784,7 @@ class BNLayer : public Layer<Dtype> {
 };
 
 
-#if defined(USE_CUDNN) 
+#if defined(USE_CUDNN)
 #if CUDNN_VERSION_MIN(5, 0, 0)
 /**
  * @brief cuDNN implementation of BNLayer.
