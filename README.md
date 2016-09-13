@@ -14,8 +14,12 @@ This branch hosts the code for the technical report ["Towards Good Practices for
 
 
 ### Updates
+- Aug 23, 2016
+  * [Temporal Segment Networks](https://github.com/yjxiong/temporal-segment-networks): a new state of the art action recognition framework is open sourced.
+- Aug 1, 2016
+  * New working example: "Actionness Estimation Using Hybrid FCNs" on CVPR 2016.
 - Jul 16, 2016
-  * New working sample: "Real-time Action Recognition with Enhanced Motion Vector CNNs" on CVPR 2016. 
+  * New working example: "Real-time Action Recognition with Enhanced Motion Vector CNNs" on CVPR 2016.
 - Apr 27, 2016
   * cuDNN v5 support, featuring the super fast WINOGrad Convolution and cuDNN implementation of BatchNormalization.
 - Dec 23, 2015
@@ -77,6 +81,9 @@ mpirun -np 4 ./install/bin/caffe train --solver=<Your Solver File> [--weights=<P
   - To disable memory optimization, set `optimize_mem` to `NO_OPTIM`. This may be useful when working with intermediate blobs.
 
 ### Working Examples
+- Temporal Segment Networks: Towards Good Practices for Deep Action Recognition
+  - [ECCV 2016 paper](http://arxiv.org/abs/1608.00859v1)
+  - [Action Recognition Framework](https://github.com/yjxiong/temporal-segment-networks)
 - Actionness Estimation Using Hybrid FCNs
   - [CVPR 2016 paper](http://www.cv-foundation.org/openaccess/content_cvpr_2016/papers/Wang_Actionness_Estimation_Using_CVPR_2016_paper.pdf)
   - [Project Site](https://github.com/wanglimin/Actionness-Estimation)
@@ -105,9 +112,22 @@ Contact
 - [Yuanjun Xiong](http://personal.ie.cuhk.edu.hk/~xy012/)
 
 ### Citation
-You are encouraged to also cite the following report if you find this repo helpful
+You are encouraged to also cite one of the following papers if you find this repo helpful
 
 ```
+@inproceedings{TSN2016ECCV,
+  author    = {Limin Wang and
+               Yuanjun Xiong and
+               Zhe Wang and
+               Yu Qiao and
+               Dahua Lin and
+               Xiaoou Tang and
+               Luc {Val Gool}},
+  title     = {Temporal Segment Networks: Towards Good Practices for Deep Action Recognition},
+  booktitle   = {ECCV},
+  year      = {2016},
+}
+
 @article{MultiGPUCaffe2015,
   author    = {Limin Wang and
                Yuanjun Xiong and
