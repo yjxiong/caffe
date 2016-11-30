@@ -291,9 +291,6 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
   // By setting richness, you can increase the memory available to cuDNN and thus
   // let it choose fast but space consuming algorithms.
   for (int i = 0; i < bottom.size(); i++) {
-    if (prev_bottom_shapes_[i] == bottom[i]->shape()) continue;
-    prev_bottom_shapes_[i] = bottom[i]->shape();
-
     cudnn::setTensor4dDesc<Dtype>(&bottom_descs_[i],
                                   this->num_,
                                   this->channels_ / this->group_,
@@ -311,6 +308,11 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
     cudnn::setConvolutionDesc<Dtype>(&conv_descs_[i], bottom_descs_[i],
                                      filter_desc_, this->pad_h_, this->pad_w_,
                                      this->stride_h_, this->stride_w_);
+
+    if (!prev_bottom_shapes_[i].empty()){
+      continue;
+    }
+    prev_bottom_shapes_[i] = bottom[i]->shape();
 
     // choose forward and backward algorithms + workspace(s)
     const int kRequestedForwardAlgoCount = 6;
@@ -366,6 +368,8 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
     need_optimize_ = true;
   }
 
+  if (!need_optimize_)
+    AdjustWorkSpaces();
 
   // Tensor descriptor for bias.
   if (this->bias_term_) {
@@ -379,10 +383,15 @@ void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
 
   for (int x = 0; x < layer_perf_.fwd_algo.size(); ++x){
     cudnnConvolutionFwdAlgo_t new_algo = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].algo;
-    size_t new_mem = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].memory;
+    size_t new_mem;
+    CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(handle_[0],
+                                                        bottom_descs_[x], filter_desc_,
+                                                        conv_descs_[x], top_descs_[x],
+                                                        new_algo, &new_mem));
+
     if ((new_algo != fwd_algo_[x]) || (new_mem != workspace_fwd_sizes_[x])) {
       fwd_algo_[x] = new_algo;
-      workspace_fwd_sizes_[x] = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].memory;
+      workspace_fwd_sizes_[x] = new_mem;
       if(workspace_fwd_sizes_[x] > workspaceData_fwd.size()){
         for (int g = 0; g < this->group_; ++g){
           workspaceData_fwd[g].reset(new SyncedMemory(workspace_fwd_sizes_[x]));
@@ -393,8 +402,11 @@ void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
 
   for (int x = 0; x < layer_perf_.bwd_filter_algo.size(); ++x){
     cudnnConvolutionBwdFilterAlgo_t new_algo = layer_perf_.bwd_filter_perf[x][layer_perf_.bwd_filter_algo[x]].algo;
-    size_t new_mem = layer_perf_.bwd_filter_perf[x][layer_perf_.bwd_filter_algo[x]].memory;
-
+    size_t new_mem;
+    CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(handle_[0],
+                                                        bottom_descs_[x], top_descs_[x],
+                                                        conv_descs_[x], filter_desc_,
+                                                        new_algo, &new_mem));
     if ((new_algo != bwd_filter_algo_[x]) || (new_mem != workspace_bwd_filter_sizes_[x])) {
       bwd_filter_algo_[x] = new_algo;
       workspace_bwd_filter_sizes_[x] = new_mem;
@@ -408,7 +420,11 @@ void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
 
   for (int x = 0; x < layer_perf_.bwd_data_algo.size(); ++x){
     cudnnConvolutionBwdDataAlgo_t new_algo = layer_perf_.bwd_data_perf[x][layer_perf_.bwd_data_algo[x]].algo;
-    size_t new_mem = layer_perf_.bwd_data_perf[x][layer_perf_.bwd_data_algo[x]].memory;
+    size_t new_mem;
+    CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(handle_[0],
+                                                             filter_desc_, top_descs_[x],
+                                                             conv_descs_[x], bottom_descs_[x],
+                                                             new_algo, &new_mem));
     if ((new_algo != bwd_data_algo_[x]) || (new_mem != workspace_bwd_data_sizes_[x])) {
       bwd_data_algo_[x] = new_algo;
       workspace_bwd_data_sizes_[x] = new_mem;
