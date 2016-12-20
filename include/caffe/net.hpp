@@ -58,6 +58,12 @@ class Net {
   string Forward(const string& input_blob_protos, Dtype* loss = NULL);
 
   /**
+   * @brief Zeroes out the diffs of all net parameters.
+   *        Should be run before Backward.
+   */
+  void ClearParamDiffs();
+
+  /**
    * The network backward should take no input and output, since it solely
    * computes the gradient w.r.t the parameters, and the data has already been
    * provided during the forward pass.
@@ -84,6 +90,13 @@ class Net {
 
   /// @brief Updates the network weights based on the diff values computed.
   void Update();
+  /**
+   * @brief Shares weight data of owner blobs with shared blobs.
+   *
+   * Note: this is called by Net::Init, and thus should normally not be
+   * called manually.
+   */
+  void ShareWeights();
 
   /**
    * @brief For an already initialized net, implicitly copies (i.e., using no
@@ -144,16 +157,27 @@ class Net {
   inline const vector<shared_ptr<Blob<Dtype> > >& params() const {
     return params_;
   }
-  /// @brief returns the parameter learning rate multipliers
+  inline const vector<Blob<Dtype>*>& learnable_params() const {
+    return learnable_params_;
+  }
+  /// @brief returns the learnable parameter learning rate multipliers
   inline const vector<float>& params_lr() const { return params_lr_; }
+  inline const vector<bool>& has_params_lr() const { return has_params_lr_; }
+  /// @brief returns the learnable parameter decay multipliers
   inline const vector<float>& params_weight_decay() const {
     return params_weight_decay_;
+  }
+  inline const vector<bool>& has_params_decay() const {
+    return has_params_decay_;
   }
   const map<string, int>& param_names_index() const {
     return param_names_index_;
   }
   inline const vector<int>& param_owners() const { return param_owners_; }
   inline const vector<pair<int ,int> >& param_layer_indices() const {return param_layer_indices_;}
+  inline const vector<string>& param_display_names() const {
+    return param_display_names_;
+  }
   /// @brief Input and output blob numbers
   inline int num_inputs() const { return net_input_blobs_.size(); }
   inline int num_outputs() const { return net_output_blobs_.size(); }
@@ -217,8 +241,8 @@ class Net {
   /// @brief Helper for displaying debug info in Update.
   void UpdateDebugInfo(const int param_id);
 
-  /// @brief Get misc parameters, e.g. the LR multiplier and weight decay.
-  void GetLearningRateAndWeightDecay();
+  /// @brief do a dry run to decide blob dependency
+  void MemoryOptimize();
 
   /// @brief The network name
   string name_;
@@ -259,14 +283,28 @@ class Net {
   vector<Blob<Dtype>*> net_output_blobs_;
   /// The parameters in the network.
   vector<shared_ptr<Blob<Dtype> > > params_;
-  /// the learning rate multipliers
+  vector<Blob<Dtype>*> learnable_params_;
+  /**
+   * The mapping from params_ -> learnable_params_: we have
+   * learnable_param_ids_.size() == params_.size(),
+   * and learnable_params_[learnable_param_ids_[i]] == params_[i].get()
+   * if and only if params_[i] is an "owner"; otherwise, params_[i] is a sharer
+   * and learnable_params_[learnable_param_ids_[i]] gives its owner.
+   */
+  vector<int> learnable_param_ids_;
+  /// the learning rate multipliers for learnable_params_
   vector<float> params_lr_;
-  /// the weight decay multipliers
+  vector<bool> has_params_lr_;
+  /// the weight decay multipliers for learnable_params_
   vector<float> params_weight_decay_;
+  vector<bool> has_params_decay_;
   /// The bytes of memory used by this net
   size_t memory_used_;
   /// Whether to compute and display debug info for the net.
   bool debug_info_;
+
+  vector< shared_ptr<SyncedMemory> > shared_diff_storage_;
+  vector< shared_ptr<SyncedMemory> > shared_data_storage_;
 
   DISABLE_COPY_AND_ASSIGN(Net);
 };

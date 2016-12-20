@@ -27,6 +27,12 @@ unordered_map<CuDNNConvolutionLayer<Dtype>*, typename CuDNNConvolutionLayer<Dtyp
 template <typename Dtype>
 bool CuDNNConvolutionLayer<Dtype>::need_optimize_ = true;
 
+template <typename Dtype>
+vector<shared_ptr<SyncedMemory> > CuDNNConvolutionLayer<Dtype>::workspaceData_fwd;
+template <typename Dtype>
+vector<shared_ptr<SyncedMemory> > CuDNNConvolutionLayer<Dtype>::workspaceData_bwd_filter;
+template <typename Dtype>
+vector<shared_ptr<SyncedMemory> > CuDNNConvolutionLayer<Dtype>::workspaceData_bwd_data;
 
 typedef struct {
     float total_time;
@@ -126,12 +132,13 @@ void CuDNNConvolutionLayer<Dtype>::RuntimeOptimize(size_t mem_limit) {
     PerfReg &layer_perf = *(layer_reg->second);
 
     //foward
-    for (int x = 0; x < layer_perf.fwd_perf.size(); ++x)
+    for (int x = 0; x < layer_perf.fwd_perf.size(); ++x){
       if (prev_dict.size() == 0) {
         initTransitFunc<Dtype, cudnnConvolutionFwdAlgoPerf_t>(prev_dict, layer_perf.fwd_perf[x], mem_limit);
       } else
         runTransitFunc<Dtype, cudnnConvolutionFwdAlgoPerf_t>(new_dict, prev_dict, layer_perf.fwd_perf[x], mem_limit);
-
+    
+}
     //bwd filter
     for (int x = 0; x < layer_perf.bwd_filter_perf.size(); ++x) {
       runTransitFunc<Dtype, cudnnConvolutionBwdFilterAlgoPerf_t>(new_dict,
@@ -217,11 +224,11 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
 
   // workspace data sizes start with zero
   workspaceSizeInBytes_fwd = workspaceSizeInBytes_bwd = 0;
-  for (int i = 0; i < this->group_*CUDNN_FWD_STREAMS_PER_GROUP; ++i)
+  for (int i = workspaceData_fwd.size(); i < this->group_; ++i)
     workspaceData_fwd.push_back(shared_ptr<SyncedMemory>(new SyncedMemory()));
-  for (int i = 0; i < this->group_*CUDNN_BWD_STREAMS_PER_GROUP; ++i)
+  for (int i = workspaceData_bwd_filter.size(); i < this->group_; ++i)
     workspaceData_bwd_filter.push_back(shared_ptr<SyncedMemory>(new SyncedMemory()));
-  for (int i = 0; i < this->group_*CUDNN_BWD_STREAMS_PER_GROUP; ++i)
+  for (int i = workspaceData_bwd_data.size(); i < this->group_; ++i)
     workspaceData_bwd_data.push_back(shared_ptr<SyncedMemory>(new SyncedMemory()));
 
 
@@ -378,24 +385,21 @@ template<typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
 
   for (int x = 0; x < layer_perf_.fwd_algo.size(); ++x){
-    cudnnConvolutionFwdAlgo_t new_algo = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].algo;
-    size_t new_mem = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].memory;
-    if ((new_algo != fwd_algo_[x]) || (new_mem != workspace_fwd_sizes_[x])) {
+    cudnnConvolutionFwdAlgo_t new_algo = layer_perf_.fwd_perf[x][0].algo;
+    size_t new_mem = layer_perf_.fwd_perf[x][0].memory;
       fwd_algo_[x] = new_algo;
-      workspace_fwd_sizes_[x] = layer_perf_.fwd_perf[x][layer_perf_.fwd_algo[x]].memory;
-      if(workspace_fwd_sizes_[x] > workspaceData_fwd.size()){
+      workspace_fwd_sizes_[x] = new_mem;
+      if(workspace_fwd_sizes_[x] > workspaceData_fwd[0]->size()){
         for (int g = 0; g < this->group_; ++g){
           workspaceData_fwd[g].reset(new SyncedMemory(workspace_fwd_sizes_[x]));
         }
       }
-    }
   }
 
   for (int x = 0; x < layer_perf_.bwd_filter_algo.size(); ++x){
-    cudnnConvolutionBwdFilterAlgo_t new_algo = layer_perf_.bwd_filter_perf[x][layer_perf_.bwd_filter_algo[x]].algo;
-    size_t new_mem = layer_perf_.bwd_filter_perf[x][layer_perf_.bwd_filter_algo[x]].memory;
+    cudnnConvolutionBwdFilterAlgo_t new_algo = layer_perf_.bwd_filter_perf[x][0].algo;
+    size_t new_mem = layer_perf_.bwd_filter_perf[x][0].memory;
 
-    if ((new_algo != bwd_filter_algo_[x]) || (new_mem != workspace_bwd_filter_sizes_[x])) {
       bwd_filter_algo_[x] = new_algo;
       workspace_bwd_filter_sizes_[x] = new_mem;
       if(workspace_bwd_filter_sizes_[x] > workspaceData_bwd_filter[0]->size()){
@@ -403,13 +407,11 @@ void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
           workspaceData_bwd_filter[g].reset(new SyncedMemory(new_mem));
         }
       }
-    }
   }
 
   for (int x = 0; x < layer_perf_.bwd_data_algo.size(); ++x){
-    cudnnConvolutionBwdDataAlgo_t new_algo = layer_perf_.bwd_data_perf[x][layer_perf_.bwd_data_algo[x]].algo;
-    size_t new_mem = layer_perf_.bwd_data_perf[x][layer_perf_.bwd_data_algo[x]].memory;
-    if ((new_algo != bwd_data_algo_[x]) || (new_mem != workspace_bwd_data_sizes_[x])) {
+    cudnnConvolutionBwdDataAlgo_t new_algo = layer_perf_.bwd_data_perf[x][0].algo;
+    size_t new_mem = layer_perf_.bwd_data_perf[x][0].memory;
       bwd_data_algo_[x] = new_algo;
       workspace_bwd_data_sizes_[x] = new_mem;
       if(workspace_bwd_data_sizes_[x] > workspaceData_bwd_data[0]->size()){
@@ -417,7 +419,6 @@ void CuDNNConvolutionLayer<Dtype>::AdjustWorkSpaces() {
           workspaceData_bwd_data[g].reset(new SyncedMemory(new_mem));
         }
       }
-    }
   }
 
 
@@ -445,9 +446,11 @@ CuDNNConvolutionLayer<Dtype>::~CuDNNConvolutionLayer() {
   }
 
   // release all allocated workspace memory blocks.
-  workspaceData_bwd_filter.empty();
-  workspaceData_bwd_data.empty();
-  workspaceData_fwd.empty();
+  if (workspaceData_bwd_filter.size()){
+   workspaceData_bwd_filter.clear();
+   workspaceData_bwd_data.clear();
+   workspaceData_fwd.clear();
+  }
 
   // unregister the layer perf
   typename boost::unordered_map<CuDNNConvolutionLayer*, PerfReg*>::iterator

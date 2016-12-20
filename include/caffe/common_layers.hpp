@@ -269,6 +269,11 @@ class FlattenLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
+
+  virtual inline bool is_sharing_diff(int top_id, int bottom_id){
+    return top_id == bottom_id;
+  }
+
  protected:
   /**
    * @param bottom input Blob vector (length 2+)
@@ -292,6 +297,7 @@ class FlattenLayer : public Layer<Dtype> {
    */
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
 };
 
 /**
@@ -384,6 +390,10 @@ class ReshapeLayer : public Layer<Dtype> {
   virtual inline const char* type() const { return "Reshape"; }
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
+
+  virtual inline bool is_sharing_diff(int top_id, int bottom_id) {
+    return top_id == bottom_id;
+  }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -633,6 +643,14 @@ class SliceLayer : public Layer<Dtype> {
     virtual inline bool EqualNumBottomTopBlobs() const { return true; }
     virtual inline bool is_gathering() {return true;}
 
+    virtual inline bool is_sharing_diff(int top_id, int bottom_id){
+#ifndef USE_MPI
+      return top_id == bottom_id;
+#else
+      return (top_id == bottom_id) && (Caffe::parallel_mode()!=Caffe::MPI);
+#endif
+    }
+
   protected:
     virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                              const vector<Blob<Dtype>*>& top);
@@ -666,6 +684,14 @@ class SliceLayer : public Layer<Dtype> {
       inline virtual bool is_scattering() {return true;}
 
       virtual inline bool EqualNumBottomTopBlobs() const { return true; }
+
+      virtual inline bool is_sharing_diff(int top_id, int bottom_id){
+#ifndef USE_MPI
+        return top_id == bottom_id;
+#else
+        return (top_id == bottom_id) && (Caffe::parallel_mode()!=Caffe::MPI);
+#endif
+      }
 
   protected:
       virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
