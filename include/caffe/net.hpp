@@ -222,6 +222,7 @@ class Net {
 
   /// @brief do a dry run to decide blob dependency
   void MemoryOptimize();
+  void MemoryOptimize_v2();
 
   /// @brief The network name
   string name_;
@@ -272,6 +273,7 @@ class Net {
   bool debug_info_;
 
   /// Memory optimization related stuff.
+  bool optimize_memory_;
   vector< shared_ptr<SyncedMemory> > shared_storage_;
   std::set<string> excluded_blob_names_;
 

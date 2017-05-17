@@ -317,7 +317,11 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
                                   this->width_out_, 1);
     cudnn::setConvolutionDesc<Dtype>(&conv_descs_[i], bottom_descs_[i],
                                      filter_desc_, this->pad_h_, this->pad_w_,
+#if CUDNN_VERSION_MIN(6, 0, 0)
+                                     this->stride_h_, this->stride_w_, this->dilation_h_, this->dilation_w_);
+#else
                                      this->stride_h_, this->stride_w_);
+#endif
 
     // choose forward and backward algorithms + workspace(s)
     const int kRequestedForwardAlgoCount = 6;

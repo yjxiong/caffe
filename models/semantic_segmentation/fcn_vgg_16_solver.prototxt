@@ -1,0 +1,14 @@
+train_net: "models/semantic_segmentation/fcn_vgg_16_train.prototxt"
+base_lr: 0.001
+momentum: 0.9
+weight_decay: 0.0005
+lr_policy: "step"
+gamma: 0.1
+stepsize: 6000
+display: 10
+max_iter: 18000
+iter_size: 2
+snapshot: 1000
+snapshot_prefix: "fcn_vgg_16"
+solver_mode: GPU
+device_id: [0,1,2,3,4,5,6,7]

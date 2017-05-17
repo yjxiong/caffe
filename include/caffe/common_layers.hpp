@@ -823,6 +823,44 @@ class CuDNNBNLayer : public BNLayer<Dtype> {
 #endif
 #endif
 
+#ifdef USE_MPI
+template <typename Dtype>
+class SyncBNLayer : public Layer<Dtype> {
+ public:
+  explicit SyncBNLayer(const LayerParameter& param)
+      : Layer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "SyncBN"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  Dtype bn_momentum_;
+  Dtype bn_eps_;
+
+  int num_;
+  int channels_;
+  int height_;
+  int width_;
+
+  Blob<Dtype> mean_buffer_;
+  Blob<Dtype> var_buffer_;
+};
+#endif
+
 /**
 * @brief Normalizes input to unit-length vector
 */
@@ -987,10 +1025,13 @@ protected:
     int num_;
     /// @brief the step of reduction
     int step_;
+    /// @brief whether to perform position sensitive learning
+    bool pos_;
     /// @brief a helper Blob used for transferring ticks to GPU
     Blob<Dtype> ticks_blob_;
     vector<int> levels_;
     vector<int> ticks_;
+    int max_tick_;
 
     Blob<Dtype> argsort_idx_;
 };

@@ -37,6 +37,11 @@ class DataTransformer {
    */
   void Transform(const Datum& datum, Blob<Dtype>* transformed_blob);
 
+
+  
+  void Transform(const Datum& datum_data, const Datum& datum_label, 
+               Blob<Dtype>* transformed_data, Blob<Dtype>* transformed_label);
+
   /**
    * @brief Applies the transformation defined in the data layer's
    * transform_param block to a vector of Datum.
@@ -122,6 +127,7 @@ class DataTransformer {
    *    cv::Mat containing the data to be transformed.
    */
   vector<int> InferBlobShape(const cv::Mat& cv_img);
+
 
  protected:
    /**

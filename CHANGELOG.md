@@ -1,3 +1,10 @@
+## Dec 25, 2016
+
+  - Supported dilated convolution
+  - Memory optimization is introduced to save memory during training and testing. [Wiki](https://github.com/yjxiong/caffe/wiki/Memory-Optimization)
+  - `BatchReductionLayer` supports reduction on an arbitrary axis with cuda implementation.
+  - Other small fixes.
+
 ## Apr 27, 2016
 
 Features:

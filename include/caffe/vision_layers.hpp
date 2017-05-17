@@ -68,6 +68,7 @@ class BaseConvolutionLayer : public Layer<Dtype> {
 
   int kernel_h_, kernel_w_;
   int stride_h_, stride_w_;
+  int dilation_h_, dilation_w_;
   int num_;
   int channels_;
   int pad_h_, pad_w_;
@@ -82,20 +83,20 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   // wrap im2col/col2im so we don't have to remember the (long) argument lists
   inline void conv_im2col_cpu(const Dtype* data, Dtype* col_buff) {
     im2col_cpu(data, conv_in_channels_, conv_in_height_, conv_in_width_,
-        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, col_buff);
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, dilation_h_, dilation_w_, col_buff);
   }
   inline void conv_col2im_cpu(const Dtype* col_buff, Dtype* data) {
     col2im_cpu(col_buff, conv_in_channels_, conv_in_height_, conv_in_width_,
-        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, data);
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, dilation_h_, dilation_w_, data);
   }
 #ifndef CPU_ONLY
   inline void conv_im2col_gpu(const Dtype* data, Dtype* col_buff) {
     im2col_gpu(data, conv_in_channels_, conv_in_height_, conv_in_width_,
-        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, col_buff);
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, dilation_h_, dilation_w_, col_buff);
   }
   inline void conv_col2im_gpu(const Dtype* col_buff, Dtype* data) {
     col2im_gpu(col_buff, conv_in_channels_, conv_in_height_, conv_in_width_,
-        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, data);
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, dilation_h_, dilation_w_, data);
   }
 #endif
 

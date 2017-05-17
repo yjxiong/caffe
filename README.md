@@ -14,6 +14,8 @@ This branch hosts the code for the technical report ["Towards Good Practices for
 
 
 ### Updates
+- Dec, 2016
+  * Major updates of the codebase. New features include memory optimization and dilated convolution.
 - Aug 23, 2016
   * [Temporal Segment Networks](https://github.com/yjxiong/temporal-segment-networks): a new state of the art action recognition framework is open sourced.
 - Aug 1, 2016
@@ -73,14 +75,13 @@ mpirun -np 4 ./install/bin/caffe train --solver=<Your Solver File> [--weights=<P
 - Runtime memory optimization
   - Memory optimization drastically reduces memory usage (half for training and almost all for testing) by
   safely sharing underlying storage of a series of blobs.
-  Note in this case, the Python/Matlab interfaces can no longer retrieve correct contents of affected blobs.
-  - Training time memory optimization is automatically enabled.
-  - To adjust memory optimization setting, add 'optimize_mem' option to the network prototxt. It can be set to
-  `TRAIN_ONLY` (default), `ALL_OPTIM`, and `NO_OPTIM`.
-  - Testing time optimization is disabled by default. To enable testing time optimization, set `optimize_mem` to `NO_OPTIM`
-  - To disable memory optimization, set `optimize_mem` to `NO_OPTIM`. This may be useful when working with intermediate blobs.
+  - For usage and the mechanism behind the scene, see the [Wiki Page](https://github.com/yjxiong/caffe/wiki/Memory-Optimization)
 
 ### Working Examples
+- Knowledge Guided Disambiguation for Large-Scale Scene Classification with Multi-Resolution CNNs
+  - [TIP Paper](http://guoshengcv.github.io/papers/scene.pdf)
+  - [Code & Models](https://github.com/wanglimin/MRCNN-Scene-Recognition)
+  - 1st in LSUN 2016 and 2nd in ILSVRC 2015 scene classification.
 - Temporal Segment Networks: Towards Good Practices for Deep Action Recognition
   - [ECCV 2016 paper](http://arxiv.org/abs/1608.00859v1)
   - [Action Recognition Framework](https://github.com/yjxiong/temporal-segment-networks)
@@ -91,7 +92,7 @@ mpirun -np 4 ./install/bin/caffe train --solver=<Your Solver File> [--weights=<P
   - [CVPR 2016 paper](https://wanglimin.github.io/papers/ZhangWWQW_CVPR16.pdf)
   - [Project Site](http://zbwglory.github.io/MV-CNN/index.html)
 - Action recognition on UCF101
-  - [Project Site](http://personal.ie.cuhk.edu.hk/~xy012/others/action_recog/)
+  - [Project Site](http://yjxiong.me/others/action_recog/)
   - [Caffe Model Files](https://github.com/yjxiong/caffe/tree/action_recog/models/action_recognition)
   - [Training scripts and data files examples](https://github.com/yjxiong/caffe/tree/action_recog/examples/action_recognition)
   - [Optical Flow Data](http://mmlab.siat.ac.cn/very_deep_two_stream_model/ucf101_flow_img_tvl1_gpu.zip)
@@ -109,7 +110,7 @@ Its function should be forwarding the "data cursor" in your data layer for one s
 ### Questions
 Contact 
 - [Limin Wang](http://wanglimin.github.io/)
-- [Yuanjun Xiong](http://personal.ie.cuhk.edu.hk/~xy012/)
+- [Yuanjun Xiong](http://yjxiong.me)
 
 ### Citation
 You are encouraged to also cite one of the following papers if you find this repo helpful

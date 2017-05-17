@@ -10,9 +10,9 @@ namespace caffe {
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::compute_output_shape() {
-  this->height_out_ = (this->height_ + 2 * this->pad_h_ - this->kernel_h_)
+  this->height_out_ = (this->height_ + 2 * this->pad_h_ - (this->dilation_h_ * (this->kernel_h_ - 1) + 1))
       / this->stride_h_ + 1;
-  this->width_out_ = (this->width_ + 2 * this->pad_w_ - this->kernel_w_)
+  this->width_out_ = (this->width_ + 2 * this->pad_w_ - (this->dilation_w_ * (this->kernel_w_ - 1) + 1))
       / this->stride_w_ + 1;
 }
 

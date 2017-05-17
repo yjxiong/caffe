@@ -23,7 +23,17 @@ shared_ptr<Layer<Dtype> > GetConvolutionLayer(
   if (engine == ConvolutionParameter_Engine_DEFAULT) {
     engine = ConvolutionParameter_Engine_CAFFE;
 #ifdef USE_CUDNN
+#if CUDNN_VERSION_MIN(6, 0, 0)
     engine = ConvolutionParameter_Engine_CUDNN;
+#else
+    if (param.convolution_param().dilation() == 1
+        && param.convolution_param().dilation_h() <= 1
+        && param.convolution_param().dilation_w() <= 1){
+      engine = ConvolutionParameter_Engine_CUDNN;
+    }else{
+      LOG(INFO)<<"falling back to Caffe convolution as dilation is not support in cuDNN versions < 6.0.";
+    }
+#endif
 #endif
   }
   if (engine == ConvolutionParameter_Engine_CAFFE) {
