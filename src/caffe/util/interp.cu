@@ -1,9 +1,12 @@
 // Copyright 2014 George Papandreou
 
 #include "caffe/common.hpp"
+#include "caffe/common.cuh"
 #include "caffe/util/interp.hpp"
 
 namespace caffe {
+
+
 
 // Bi-linear interpolation
 // IN : [channels height1 width1] cropped from a bigger [Height1 Width1] image

@@ -367,6 +367,7 @@ message LayerParameter {
   optional BiasParameter bias_param = 161;
   optional BatchReductionParameter batch_reduction_param = 162;
   optional InterpParameter interp_param = 301;
+  optional ColorConvParameter color_conv_param = 1030;
 }
 
 // Message that stores parameters used to apply transformation
@@ -1345,4 +1346,17 @@ message InterpParameter {
   optional int32 shrink_factor = 4 [default = 1]; // shrink factor
   optional int32 pad_beg = 5 [default = 0]; // padding at begin of input
   optional int32 pad_end = 6 [default = 0]; // padding at end of input
+}
+
+message ColorConvParameter {
+  enum ColorSpace {
+    BGR = 0;
+    RGB = 1;
+    XYZ = 2;
+    Lab = 3;
+//     Luv = 4;
+    Gray = 5;
+  }
+  optional ColorSpace input = 1 [default = BGR];
+  optional ColorSpace output = 2 [default = BGR];
 }
