@@ -31,19 +31,35 @@ fi
 
 # Install CUDA, if needed
 if $WITH_CUDA; then
-  CUDA_URL=http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1204/x86_64/cuda-repo-ubuntu1204_6.5-14_amd64.deb
-  CUDA_FILE=/tmp/cuda_install.deb
-  curl $CUDA_URL -o $CUDA_FILE
-  dpkg -i $CUDA_FILE
-  rm -f $CUDA_FILE
+  # install repo packages
+  CUDA_REPO_PKG=cuda-repo-ubuntu1404_7.5-18_amd64.deb
+  wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/$CUDA_REPO_PKG
+  dpkg -i $CUDA_REPO_PKG
+  rm $CUDA_REPO_PKG
+
+  if $WITH_CUDNN ; then
+    ML_REPO_PKG=nvidia-machine-learning-repo-ubuntu1404_4.0-2_amd64.deb
+    wget http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1404/x86_64/$ML_REPO_PKG
+    dpkg -i $ML_REPO_PKG
+  fi
+
+  # update package lists
   apt-get -y update
-  # Install the minimal CUDA subpackages required to test Caffe build.
-  # For a full CUDA installation, add 'cuda' to the list of packages.
-  apt-get -y install cuda-core-6-5 cuda-cublas-6-5 cuda-cublas-dev-6-5 cuda-cudart-6-5 cuda-cudart-dev-6-5 cuda-curand-6-5 cuda-curand-dev-6-5
-  # Create CUDA symlink at /usr/local/cuda
-  # (This would normally be created by the CUDA installer, but we create it
-  # manually since we did a partial installation.)
-  ln -s /usr/local/cuda-6.5 /usr/local/cuda
+
+  # install packages
+  CUDA_PKG_VERSION="7-5"
+  CUDA_VERSION="7.5"
+  apt-get install -y --no-install-recommends \
+    cuda-core-$CUDA_PKG_VERSION \
+    cuda-cudart-dev-$CUDA_PKG_VERSION \
+    cuda-cublas-dev-$CUDA_PKG_VERSION \
+    cuda-curand-dev-$CUDA_PKG_VERSION
+  # manually create CUDA symlink
+  ln -s /usr/local/cuda-$CUDA_VERSION /usr/local/cuda
+
+  if $WITH_CUDNN ; then
+    apt-get install -y --no-install-recommends libcudnn6-dev
+  fi
 fi
 
 # Install LMDB

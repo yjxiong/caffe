@@ -1,6 +1,11 @@
+dist: trusty
+sudo: required
+
 # Use a build matrix to do two builds in parallel:
 # one using CMake, and one using make.
 env:
+  global:
+    - NUM_THREADS=4
   matrix:
     - WITH_CUDA=false WITH_CMAKE=true
     - WITH_CUDA=true WITH_CMAKE=true
