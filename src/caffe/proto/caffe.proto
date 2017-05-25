@@ -207,8 +207,9 @@ message SolverParameter {
   // If false, don't save a snapshot after training finishes.
   optional bool snapshot_after_train = 28 [default = true];
 
-  // Total memory allowed to be used for workspaces in cudnn's convolution, in MBs. default is 300MB.
-  // The framework will try to find the fastest setup given this limit.
+  // max memory space that can be used for cuDNN convolution workspace
+  // default to 300, which means 300MB
+  // 0 means infinite
   optional int32 richness = 37 [default = 300];
 }
 
