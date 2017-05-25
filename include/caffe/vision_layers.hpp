@@ -240,7 +240,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
       const vector<Blob<Dtype>*>& top);
   virtual ~CuDNNConvolutionLayer();
 
-  static void RuntimeOptimize(size_t mem_limit);
 
  protected:
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
@@ -260,39 +259,27 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   int bottom_offset_, top_offset_, weight_offset_, bias_offset_;
 
   // algorithms for forward and backwards convolutions
-  cudnnConvolutionFwdAlgo_t *fwd_algo_;
-  cudnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
-  cudnnConvolutionBwdDataAlgo_t *bwd_data_algo_;
+  vector<cudnnConvolutionFwdAlgo_t> fwd_algo_;
+  vector<cudnnConvolutionBwdFilterAlgo_t> bwd_filter_algo_;
+  vector<cudnnConvolutionBwdDataAlgo_t> bwd_data_algo_;
 
-  size_t *workspace_fwd_sizes_;
-  size_t *workspace_bwd_data_sizes_;
-  size_t *workspace_bwd_filter_sizes_;
+  size_t *workspace_fwd_offsets_;
+  size_t *workspace_bwd_data_offsets_;
+  size_t *workspace_bwd_filter_offsets_;
 
   /** We prefer using a series of managed memory blocks to a single memory pool
    *  The latter approach is prone to problem and has issues in memory alignment
    **/
-  size_t workspaceSizeInBytes_fwd;  // size of underlying storage
-  static vector<shared_ptr<SyncedMemory> > workspaceData_fwd;  // underlying storage
+  static shared_ptr<SyncedMemory> workspaceData_fwd;  // underlying storage
+  static shared_ptr<SyncedMemory> workspaceData_bwd_filter;  // underlying storage
+  static shared_ptr<SyncedMemory> workspaceData_bwd_data;  // underlying storage
 
-  size_t workspaceSizeInBytes_bwd;  // size of underlying storage
-  static vector<shared_ptr<SyncedMemory> > workspaceData_bwd_filter;  // underlying storage
-  static vector<shared_ptr<SyncedMemory> > workspaceData_bwd_data;  // underlying storage
+  static size_t conv_layer_count;
 
-  vector<vector<int> > prev_bottom_shapes_;
 
-  struct PerfReg {
-      vector<vector<cudnnConvolutionFwdAlgoPerf_t> > fwd_perf;
-      vector<vector<cudnnConvolutionBwdFilterAlgoPerf_t> > bwd_filter_perf;
-      vector<vector<cudnnConvolutionBwdDataAlgoPerf_t> > bwd_data_perf;
-      vector<int> fwd_algo;
-      vector<int> bwd_filter_algo;
-      vector<int> bwd_data_algo;
-  };
+  bool need_benchmark_;
 
-  PerfReg layer_perf_;
 
-  static boost::unordered_map<CuDNNConvolutionLayer*, PerfReg*>  perf_reg;
-  static bool need_optimize_;
 };
 #endif
 
