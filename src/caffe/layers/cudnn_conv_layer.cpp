@@ -166,7 +166,7 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
       // choose the fastest within limit
       // if all algorithms exceed memory limit, we will use the 0 algorithm with no workspace
       for (int a = 0; a < kRequestedForwardAlgoCount; ++a){
-        if ((fwd_perf[a].memory * this->group_ / 1024 / 1024) < Caffe::cudnn_mem_richness()
+        if (fwd_perf[a].memory * this->group_ < (Caffe::cudnn_mem_richness() * 1024 * 1024)
             || Caffe::cudnn_mem_richness() == 0){
           fwd_algo_[i] = fwd_perf[a].algo;
           break;
@@ -189,7 +189,7 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
       // choose the fastest within limit
       // if all algorithms exceed memory limit, we will use the 0 algorithm with no workspace
       for (int a = 0; a < kRequestedBackwardFilterAlgoCount; ++a){
-        if ((bwd_filter_perf[a].memory * this->group_ / 1024 / 1024) < Caffe::cudnn_mem_richness()
+        if (bwd_filter_perf[a].memory * this->group_ < (Caffe::cudnn_mem_richness() * 1024 * 1024)
             || Caffe::cudnn_mem_richness() == 0){
           bwd_filter_algo_[i] = bwd_filter_perf[a].algo;
           break;
@@ -212,7 +212,7 @@ void CuDNNConvolutionLayer<Dtype>::Reshape(
       // choose the fastest within limit
       // if all algorithms exceed memory limit, we will use the 0 algorithm with no workspace
       for (int a = 0; a < kRequestedBackwardDataAlgoCount; ++a){
-        if ((bwd_data_perf[a].memory * this->group_ / 1024 / 1024) < Caffe::cudnn_mem_richness()
+        if (bwd_data_perf[a].memory * this->group_ <(Caffe::cudnn_mem_richness() * 1024 * 1024)
             || Caffe::cudnn_mem_richness() == 0){
           bwd_data_algo_[i] = bwd_data_perf[a].algo;
           break;
