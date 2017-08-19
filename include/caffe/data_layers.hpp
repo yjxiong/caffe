@@ -356,6 +356,58 @@ protected:
 
 
 /**
+ * @brief Provides data to the Net from untrimmed video files.
+ *
+ * TODO(dox): thorough documentation for Forward and proto params.
+ */
+template <typename Dtype>
+class SequenceDataLayer : public BasePrefetchingDataLayer<Dtype> {
+public:
+	explicit SequenceDataLayer(const LayerParameter& param)
+	: BasePrefetchingDataLayer<Dtype>(param) {}
+	virtual ~SequenceDataLayer();
+	virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+			const vector<Blob<Dtype>*>& top);
+
+	virtual inline const char* type() const { return "SequenceData"; }
+	virtual inline int ExactNumBottomBlobs() const { return 0; }
+	virtual inline int ExactNumTopBlobs() const { return 2; }
+
+protected:
+	// for shuffling lines_, lines_duration_, lines_shot_
+	shared_ptr<Caffe::RNG> prefetch_rng_;
+	shared_ptr<Caffe::RNG> prefetch_rng_3_;
+	shared_ptr<Caffe::RNG> prefetch_rng_2_;
+        shared_ptr<Caffe::RNG> prefetch_rng_1_;
+        // for random picking shot and frame
+	shared_ptr<Caffe::RNG> frame_prefetch_rng_;
+
+	virtual void ShuffleSequences();
+	virtual void InternalThreadEntry();
+
+#ifdef USE_MPI
+	inline virtual void advance_cursor(){
+		lines_id_++;
+		if (lines_id_ >= lines_.size()) {
+			// We have reached the end. Restart from the first.
+			DLOG(INFO) << "Restarting data prefetching from start.";
+			lines_id_ = 0;
+			if (this->layer_param_.sequence_data_param().shuffle()) {
+				ShuffleSequences();
+			}
+		}
+	}
+#endif
+
+	vector<std::pair<std::string, int> > lines_;
+	vector<int> lines_duration_;
+        vector<vector<std::pair<int, int> > > lines_shot_;
+	int lines_id_;
+	string name_pattern_;
+};
+
+
+/**
  * @brief Provides data to the Net from memory.
  *
  * TODO(dox): thorough documentation for Forward and proto params.

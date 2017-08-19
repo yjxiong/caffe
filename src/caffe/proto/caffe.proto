@@ -365,6 +365,7 @@ message LayerParameter {
   optional ScaleParameter scale_param = 160;
   optional BiasParameter bias_param = 161;
   optional BatchReductionParameter batch_reduction_param = 162;
+  optional SequenceDataParameter sequence_data_param = 163;
 }
 
 // Message that stores parameters used to apply transformation
@@ -572,6 +573,7 @@ message EltwiseParameter {
     PROD = 0;
     SUM = 1;
     MAX = 2;
+    STOCHASTIC_SUM = 3;
   }
   optional EltwiseOp operation = 1 [default = SUM]; // element-wise operation
   repeated float coeff = 2; // blob-wise coefficient for SUM operation
@@ -702,6 +704,52 @@ message VideoDataParameter{
   // The type of input
   optional bool encoded = 15 [default = false];
 }
+
+message SequenceDataParameter{
+  // Specify the video source.
+  optional string video_source = 1;
+  // Specify the shot source.
+  optional string shot_source = 16;
+  // Specify the batch size.
+  optional uint32 batch_size = 4;
+  // The rand_skip variable is for the data layer to skip a few data points
+  // to avoid all asynchronous sgd clients to start at the same point. The skip
+  // point would be set as rand_skip * rand(0,1). Note that rand_skip should not
+  // be larger than the number of keys in the leveldb.
+  optional uint32 rand_skip = 7 [default = 0];
+  // Whether or not ImageLayer should shuffle the list of files at every epoch.
+  optional bool shuffle = 8 [default = false];
+  // It will also resize images if new_height or new_width are not zero.
+  optional uint32 new_height = 9 [default = 0];
+  optional uint32 new_width = 10 [default = 0];
+  optional uint32 num_frames = 11 [default = 1];
+  optional uint32 num_segments = 12 [default = 1];
+  optional uint32 num_shots = 17 [default = 1];
+  // DEPRECATED. See TransformationParameter. For data pre-processing, we can do
+  // simple scaling and subtracting the data mean, if provided. Note that the
+  // mean subtraction is always carried out before scaling.
+  optional float scale = 2 [default = 1];
+  optional string mean_file = 3;
+  // DEPRECATED. See TransformationParameter. Specify if we would like to randomly
+  // crop an image.
+  optional uint32 crop_size = 5 [default = 0];
+  // DEPRECATED. See TransformationParameter. Specify if we want to randomly mirror
+  // data.
+  optional bool mirror = 6 [default = false];
+  enum Modality {
+    RGB = 0;
+    FLOW = 1;
+  }
+  optional Modality modality = 13 [default = FLOW];
+
+  // the name pattern for frame images,
+  // for RGB modality it is default to "img_%04d.jpg", for FLOW "flow_x_%04d" and "flow_y_%04d"
+  optional string name_pattern = 14;
+
+  // The type of input
+  optional bool encoded = 15 [default = false];
+}
+
 message InfogainLossParameter {
   // Specify the infogain matrix source.
   optional string source = 1;
