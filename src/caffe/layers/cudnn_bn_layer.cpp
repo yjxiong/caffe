@@ -55,6 +55,10 @@ void CuDNNBNLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 	    this->batch_sum_multiplier_.Reshape(this->num_, 1, 1, 1);
 	}
 	if (bottom[0]->num_axes() >=5) {
+		this->num_ = bottom[0]->shape(0);
+	    	this->channels_ = bottom[0]->shape(1);
+	    	this->height_ = bottom[0]->shape(2) * bottom[0]->shape(3);
+	    	this->width_ = bottom[0]->shape(4);
 		vector<int> blob_shape_(5,0);
 		blob_shape_[0] = bottom[0]->shape(0);
 		blob_shape_[1] = bottom[0]->shape(1);
