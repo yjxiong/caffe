@@ -19,7 +19,7 @@ void SyncBNLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->blobs_.resize(4);
     vector<int> shape;
     shape.push_back(1);
-    shape.push_back(bottom[0]->channels());
+    shape.push_back(bottom[0]->shape(1));
     // slope
     this->blobs_[0].reset(new Blob<Dtype>(shape));
     shared_ptr<Filler<Dtype> > slope_filler(GetFiller<Dtype>(
@@ -54,10 +54,17 @@ void SyncBNLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void SyncBNLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  num_ = bottom[0]->num();
-  channels_ = bottom[0]->channels();
-  height_ = bottom[0]->height();
-  width_ = bottom[0]->width();
+  if (bottom[0]->num_axes() < 5) {
+      num_ = bottom[0]->shape(0);
+      channels_ = bottom[0]->shape(1);
+      height_ = bottom[0]->shape(2);
+      width_ = bottom[0]->shape(3);
+  } else {
+      num_ = bottom[0]->shape(0);
+      channels_ = bottom[0]->shape(1);
+      height_ = bottom[0]->shape(2) * bottom[0]->shape(3);
+      width_ = bottom[0]->shape(4);
+  }
 
   top[0]->ReshapeLike(*(bottom[0]));
 
